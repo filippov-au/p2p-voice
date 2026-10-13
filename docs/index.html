@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P2P Voice</title><link rel="stylesheet" href="style.css"></head><body>
+<h1>P2P Voice</h1>
+<div id="lobby"><button id="create">Create room</button></div>
+<div id="room" hidden>
+ <p>Room link (share it): <input id="link" readonly size="60"> <button id="copy">Copy</button></p>
+ <p>Status: <b id="status">idle</b> · Peer: <b id="peer">—</b></p>
+ <p><button id="mute">Mute</button>
+  <label><input type="checkbox" id="aec" checked> Echo cancel</label>
+  <label><input type="checkbox" id="ns" checked> Noise suppr.</label>
+  <label><input type="checkbox" id="agc" checked> Auto gain</label></p>
+ <div id="stats">RTT: <b id="rtt">—</b> ms · Loss: <b id="loss">—</b> · Jitter: <b id="jitter">—</b> ms · Codec: <b id="codec">—</b></div>
+ <div id="log"></div>
+ <form id="chat"><input id="msg" autocomplete="off" placeholder="Message…" disabled><button disabled id="send">Send</button></form>
+ <audio id="remote" autoplay></audio>
+</div>
+<script src="app.js" type="module"></script></body></html>

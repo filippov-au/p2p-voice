@@ -1,0 +1,12 @@
+name = "p2p-voice-signal"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+account_id = "ed47ab3e2ac01814ebcc905a9ccb6668"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
