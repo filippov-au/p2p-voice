@@ -1,0 +1,10 @@
+{
+  "name": "p2p-voice-signal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen-vapid": "node scripts/gen-vapid.mjs",
+    "test": "node test/webpush.test.mjs",
+    "deploy": "npx wrangler@3 deploy"
+  }
+}

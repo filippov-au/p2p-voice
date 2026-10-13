@@ -10,3 +10,8 @@ class_name = "Room"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+[vars]
+VAPID_PUBLIC_KEY = "BMMAxAdUe3kE37mWKMi-MsQ6btod1B-sgRnXchOca2ZaImueApgoEjVN11wfjpth4QlcS2TuOK0zBT4WeiN3T10"
+VAPID_SUBJECT = "mailto:tmn.sun@gmail.com"
+# VAPID_PRIVATE_KEY is a secret: npx wrangler secret put VAPID_PRIVATE_KEY

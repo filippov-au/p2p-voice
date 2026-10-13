@@ -1,6 +1,10 @@
+import { enableWakeLock, disableWakeLock } from "./wakelock.js";
+import { unlockAudio, playConnectSound, playDisconnectSound } from "./tones.js";
+import { clientId, registerSW, subscribePush, unsubscribePush, pushSupported } from "./push.js";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
+let peerUp = false; // true between connect tone and disconnect tone (dedupe)
 let ws, pc, dc, localStream, nick, muted = false, statsTimer, prevLoss = null;
 
 function log(text, cls = "") { const d = document.createElement("div"); d.className = cls; d.textContent = text; $("log").append(d); $("log").scrollTop = 1e9; }
@@ -50,12 +54,18 @@ function newPC() {
   pc.onicecandidate = e => e.candidate && send({ type: "ice", candidate: e.candidate });
   pc.ontrack = e => { const a = $("remote"); a.srcObject = e.streams[0];
     try { e.receiver.playoutDelayHint = 0; e.receiver.jitterBufferTarget = 0; } catch {} a.play().catch(() => {}); };
-  pc.onconnectionstatechange = () => { status(pc.connectionState); window.__state = pc.connectionState; };
+  const me = pc;
+  pc.onconnectionstatechange = () => { if (me !== pc) return; const st = pc.connectionState; status(st); window.__state = st; onConnState(st); };
   pc.ondatachannel = e => setupDC(e.channel);
   window.__pc = pc;
   return pc;
 }
-function closePC() { try { dc?.close(); pc?.close(); } catch {} pc = dc = null; $("peer").textContent = "—"; }
+function onConnState(st) {
+  if (st === "connected") { enableWakeLock(); if (!peerUp) { peerUp = true; playConnectSound(); } }
+  else if (st === "disconnected" || st === "failed" || st === "closed") peerGone();
+}
+function peerGone() { disableWakeLock(); if (peerUp) { peerUp = false; playDisconnectSound(); } }
+function closePC() { if (pc) peerGone(); try { dc?.close(); pc?.close(); } catch {} pc = dc = null; $("peer").textContent = "—"; }
 function send(o) { ws?.readyState === 1 && ws.send(JSON.stringify(o)); }
 
 async function call() {
@@ -67,7 +77,7 @@ async function call() {
 async function onSignal(m) {
   if (m.type === "welcome") { status(m.peers.length ? "calling…" : "waiting for peer…"); if (m.peers.length) await call(); }
   else if (m.type === "peer-joined") { status("peer joining…"); }
-  else if (m.type === "peer-left") { log("peer left", "sys"); closePC(); status("waiting for peer…"); }
+  else if (m.type === "peer-left") { log("peer left", "sys"); peerGone(); closePC(); status("waiting for peer…"); }
   else if (m.type === "offer") { newPC(); await pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
     const a = await pc.createAnswer(); a.sdp = mungeOpus(a.sdp); await pc.setLocalDescription(a); send({ type: "answer", sdp: a.sdp }); }
   else if (m.type === "answer") await pc.setRemoteDescription({ type: "answer", sdp: m.sdp });
@@ -90,17 +100,30 @@ async function stats() {
 }
 
 async function join(room) {
+  window.__room = room;
+  const notify = $("notify");
+  if (!pushSupported()) { notify.disabled = true; $("notifyinfo").textContent = /iP(hone|ad)/.test(navigator.userAgent) ? "iOS: добавьте сайт на экран «Домой»" : "не поддерживается"; }
+  else notify.checked = localStorage["push:" + room] === "1" && Notification.permission === "granted";
+  notify.onchange = async () => {
+    if (!notify.checked) { $("notifyinfo").textContent = ""; unsubscribePush(room).catch(() => {}); return; }
+    $("notifyinfo").textContent = "…";
+    try { await subscribePush(room); $("notifyinfo").textContent = "включено"; }
+    catch (e) { notify.checked = false; $("notifyinfo").textContent = e.message; }
+  };
   $("lobby").hidden = true; $("room").hidden = false; $("link").value = location.href;
   nick = localStorage.nick || prompt("Nickname?", "player") || "player"; localStorage.nick = nick;
   try { localStream = await getMic(); } catch (e) { log("Mic error: " + e.message, "sys"); return; }
-  ws = new WebSocket(SIGNAL + room);
+  ws = new WebSocket(SIGNAL + room + "?cid=" + clientId());
   ws.onmessage = e => onSignal(JSON.parse(e.data));
   ws.onclose = e => { status(e.code === 1006 && !pc ? "room full or signaling down" : "signaling closed"); };
   ws.onopen = () => status("signaling connected");
   statsTimer = setInterval(stats, 1000);
 }
 
-$("create").onclick = () => { location.hash = randomId(); };
+["pointerdown", "keydown", "touchend"].forEach(ev => document.addEventListener(ev, unlockAudio, { capture: true }));
+window.addEventListener("pagehide", () => disableWakeLock());
+registerSW();
+$("create").onclick = () => { unlockAudio(); location.hash = randomId(); };
 $("copy").onclick = () => navigator.clipboard.writeText(location.href);
 $("mute").onclick = () => { muted = !muted; localStream?.getAudioTracks().forEach(t => t.enabled = !muted); $("mute").textContent = muted ? "Unmute" : "Mute"; };
 ["aec", "ns", "agc"].forEach(id => $(id).onchange = reacquire);

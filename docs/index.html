@@ -1,5 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>P2P Voice</title><link rel="stylesheet" href="style.css"></head><body>
+<title>P2P Voice</title><link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#16181d">
+<link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <h1>P2P Voice</h1>
 <div id="lobby"><button id="create">Create room</button></div>
 <div id="room" hidden>
@@ -9,6 +11,7 @@
   <label><input type="checkbox" id="aec" checked> Echo cancel</label>
   <label><input type="checkbox" id="ns" checked> Noise suppr.</label>
   <label><input type="checkbox" id="agc" checked> Auto gain</label></p>
+ <p><label><input type="checkbox" id="notify"> Уведомить, когда кто-то зайдёт</label> <small id="notifyinfo"></small></p>
  <div id="stats">RTT: <b id="rtt">—</b> ms · Loss: <b id="loss">—</b> · Jitter: <b id="jitter">—</b> ms · Codec: <b id="codec">—</b></div>
  <div id="log"></div>
  <form id="chat"><input id="msg" autocomplete="off" placeholder="Message…" disabled><button disabled id="send">Send</button></form>

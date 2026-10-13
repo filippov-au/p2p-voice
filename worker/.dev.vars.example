@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev`. Generate with: npm run gen-vapid
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:tmn.sun@gmail.com
