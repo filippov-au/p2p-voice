@@ -7,11 +7,8 @@
 <div id="room" hidden>
  <p>Room link (share it): <input id="link" readonly size="60"> <button id="copy">Copy</button></p>
  <p>Status: <b id="status">idle</b> · Peer: <b id="peer">—</b></p>
- <p><button id="mute">Mute</button>
-  <label><input type="checkbox" id="aec" checked> Echo cancel</label>
-  <label><input type="checkbox" id="ns" checked> Noise suppr.</label>
-  <label><input type="checkbox" id="agc" checked> Auto gain</label></p>
- <p><label><input type="checkbox" id="notify"> Уведомить, когда кто-то зайдёт</label> <small id="notifyinfo"></small></p>
+ <p><button id="mute">Mute</button></p>
+ <p><small id="notifyinfo" hidden>Чтобы получать уведомления на iPhone, добавьте сайт на экран «Домой» и откройте его с иконки.</small></p>
  <div id="stats">RTT: <b id="rtt">—</b> ms · Loss: <b id="loss">—</b> · Jitter: <b id="jitter">—</b> ms · Codec: <b id="codec">—</b></div>
  <div id="log"></div>
  <form id="chat"><input id="msg" autocomplete="off" placeholder="Message…" disabled><button disabled id="send">Send</button></form>

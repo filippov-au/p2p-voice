@@ -14,8 +14,7 @@ const keyBytes = b64 => Uint8Array.from(atob(b64.replace(/-/g, "+").replace(/_/g
 // Must be called from a user gesture.
 export async function subscribePush(roomId) {
   if (!pushSupported()) throw new Error("Push не поддерживается (на iOS: добавьте сайт на экран «Домой»)");
-  const perm = await Notification.requestPermission();
-  if (perm !== "granted") throw new Error("Уведомления запрещены");
+  if (Notification.permission !== "granted") throw new Error("notifications not granted");
   const reg = (await registerSW()) && await navigator.serviceWorker.ready;
   if (!reg) throw new Error("Service worker не зарегистрирован");
   const { publicKey } = await (await fetch(API + "vapid-public-key")).json();

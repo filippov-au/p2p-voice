@@ -1,6 +1,6 @@
 import { enableWakeLock, disableWakeLock } from "./wakelock.js";
 import { unlockAudio, playConnectSound, playDisconnectSound } from "./tones.js";
-import { clientId, registerSW, subscribePush, unsubscribePush, pushSupported } from "./push.js";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -12,20 +12,13 @@ function status(s) { $("status").textContent = s; }
 function randomId() { const b = crypto.getRandomValues(new Uint8Array(16)); return Array.from(b, x => x.toString(16).padStart(2, "0")).join(""); }
 
 function audioConstraints() {
-  return { echoCancellation: $("aec").checked, noiseSuppression: $("ns").checked, autoGainControl: $("agc").checked,
+  return { echoCancellation: true, noiseSuppression: true, autoGainControl: true,
     channelCount: 1, sampleRate: 48000, latency: 0 };
 }
 async function getMic() {
   const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
   s.getAudioTracks().forEach(t => { t.enabled = !muted; t.contentHint = "speech"; });
   return s;
-}
-async function reacquire() {
-  const ns = await getMic(); const t = ns.getAudioTracks()[0];
-  const sender = pc?.getSenders().find(s => s.track?.kind === "audio");
-  if (sender) await sender.replaceTrack(t);
-  localStream?.getTracks().forEach(x => x.stop()); localStream = ns;
-  log(`mic: AEC=${$("aec").checked} NS=${$("ns").checked} AGC=${$("agc").checked}`, "sys");
 }
 
 // Opus: mono, 48k, ~40kbps, 10ms frames, FEC, DTX
@@ -101,15 +94,13 @@ async function stats() {
 
 async function join(room) {
   window.__room = room;
-  const notify = $("notify");
-  if (!pushSupported()) { notify.disabled = true; $("notifyinfo").textContent = /iP(hone|ad)/.test(navigator.userAgent) ? "iOS: добавьте сайт на экран «Домой»" : "не поддерживается"; }
-  else notify.checked = localStorage["push:" + room] === "1" && Notification.permission === "granted";
-  notify.onchange = async () => {
-    if (!notify.checked) { $("notifyinfo").textContent = ""; unsubscribePush(room).catch(() => {}); return; }
-    $("notifyinfo").textContent = "…";
-    try { await subscribePush(room); $("notifyinfo").textContent = "включено"; }
-    catch (e) { notify.checked = false; $("notifyinfo").textContent = e.message; }
-  };
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent), standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  if (ios && !standalone) $("notifyinfo").hidden = false;
+  if (pushSupported()) {
+    if (Notification.permission === "granted") autoPush(room);
+    else if (Notification.permission === "default") // joined via link: ask on the first gesture in the room
+      document.addEventListener("pointerdown", () => askPush(room), { once: true, capture: true });
+  }
   $("lobby").hidden = true; $("room").hidden = false; $("link").value = location.href;
   nick = localStorage.nick || prompt("Nickname?", "player") || "player"; localStorage.nick = nick;
   try { localStream = await getMic(); } catch (e) { log("Mic error: " + e.message, "sys"); return; }
@@ -123,14 +114,21 @@ async function join(room) {
 ["pointerdown", "keydown", "touchend"].forEach(ev => document.addEventListener(ev, unlockAudio, { capture: true }));
 window.addEventListener("pagehide", () => disableWakeLock());
 registerSW();
-$("create").onclick = () => { unlockAudio(); location.hash = randomId(); };
+$("create").onclick = () => { unlockAudio(); const id = randomId();
+  askPush(id).finally(() => { location.hash = id; }); };
 $("copy").onclick = () => navigator.clipboard.writeText(location.href);
 $("mute").onclick = () => { muted = !muted; localStream?.getAudioTracks().forEach(t => t.enabled = !muted); $("mute").textContent = muted ? "Unmute" : "Mute"; };
-["aec", "ns", "agc"].forEach(id => $(id).onchange = reacquire);
 $("chat").onsubmit = e => { e.preventDefault(); const text = $("msg").value.trim();
   if (!text || dc?.readyState !== "open") return; dc.send(JSON.stringify({ t: "msg", nick, text })); log(`${nick}: ${text}`); $("msg").value = ""; };
 window.__sendChat = t => { $("msg").value = t; $("chat").requestSubmit(); };
 
+// Push: always on. Permission is requested inside a user gesture; subscribe silently if granted, else nothing.
+function autoPush(room) { subscribePush(room).catch(e => console.warn("push:", e.message)); }
+function askPush(room) {
+  if (!pushSupported() || Notification.permission === "denied") return Promise.resolve();
+  const p = Notification.permission === "granted" ? Promise.resolve("granted") : Notification.requestPermission();
+  return p.then(r => r === "granted" ? subscribePush(room).catch(e => console.warn("push:", e.message)) : null, () => {});
+}
 function route() { const r = location.hash.slice(1); if (/^[A-Za-z0-9_-]{8,64}$/.test(r)) join(r); }
 window.addEventListener("hashchange", () => location.reload());
 route();
