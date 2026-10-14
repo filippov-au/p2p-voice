@@ -103,7 +103,7 @@ export class Room extends DurableObject {
   }
   async alarm() {
     this.evictStale();
-    if (this.live().length) await this.ctx.storage.setAlarm(Date.now() + 5000);
+    if (this.live().length) await this.ctx.storage.setAlarm(Date.now() + 2000);
   }
   async fetch(req) {
     const roomId = req.headers.get("X-Room-Id") || "";
@@ -127,7 +127,7 @@ export class Room extends DurableObject {
     server.serializeAttachment({ id, cid, nick, seen: Date.now() });
     server.send(JSON.stringify({ type: "welcome", id, kind, max, peers: peers.map(p => ({ id: this.info(p).id, nick: this.info(p).nick })) }));
     this.broadcast({ type: "peer-joined", id, nick }, server);
-    if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + 5000);
+    if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + 2000);
     if (roomId) this.ctx.waitUntil(this.notifyOthers(roomId, cid));
     return new Response(null, { status: 101, webSocket: client });
   }

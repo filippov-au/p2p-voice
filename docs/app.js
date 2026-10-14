@@ -72,7 +72,7 @@ const anyUp = () => [...peers.values()].some(p => p.up);
 function refreshCall() {
   const up = [...peers.values()].filter(p => p.up);
   if (up.length) enableWakeLock(); else disableWakeLock();
-  const st = up.length ? "connected" : peers.size ? "connecting…" : (ws?.readyState === 1 ? "waiting for peer…" : $("status").textContent);
+  const st = roomFull ? `room full (max ${roomMax})` : up.length ? "connected" : peers.size ? "connecting…" : (ws?.readyState === 1 ? "waiting for peer…" : $("status").textContent);
   status(st); window.__state = st;
   $("peer").textContent = roomKind === "group" ? `${up.length}/${roomMax - 1} · ${[...peers.values()].map(p => p.nick || "…").join(", ") || "—"}`
                                                : ([...peers.values()][0]?.nick || "—");
@@ -138,7 +138,7 @@ window.__iceRestart = id => { const p = id ? peers.get(id) : [...peers.values()]
 
 async function onSignal(m) {
   if (m.type === "pong") { lastPong = Date.now(); return; }
-  if (m.type === "full") { roomFull = true; status(`room full (max ${m.max})`); window.__state = "full"; return; }
+  if (m.type === "full") { roomFull = true; roomMax = m.max; for (const id of [...peers.keys()]) removePeer(id); status(`room full (max ${m.max})`); window.__state = "full"; return; }
   if (m.type === "welcome") {
     myId = m.id; roomKind = m.kind; roomMax = m.max; document.body.classList.toggle("group", roomKind === "group");
     $("roomkind").textContent = roomKind === "group" ? `GROUP · up to ${roomMax}` : "1:1";
