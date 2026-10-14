@@ -2,3 +2,4 @@ body{font-family:system-ui,sans-serif;max-width:760px;margin:2em auto;background
 button,input{font:inherit;background:#262a33;color:#eee;border:1px solid #444;border-radius:4px;padding:.3em .6em}
 #log{height:300px;overflow:auto;border:1px solid #333;padding:.5em;margin:.5em 0;background:#0f1115}
 #chat{display:flex;gap:.5em}#msg{flex:1}#stats{font-family:monospace;color:#9fd}.sys{color:#888}
+#log a{color:#6cb6ff;text-decoration:underline;word-break:break-all}#log a:hover{color:#9cd0ff}

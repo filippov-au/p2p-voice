@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=5";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=5";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=5";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=6";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=6";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=6";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -8,6 +8,26 @@ let peerUp = false; // true between connect tone and disconnect tone (dedupe)
 let ws, pc, dc, localStream, nick, muted = false, statsTimer, prevLoss = null;
 
 function log(text, cls = "") { const d = document.createElement("div"); d.className = cls; d.textContent = text; $("log").append(d); $("log").scrollTop = 1e9; }
+// Chat line with safe auto-linking: text nodes + <a>, never innerHTML.
+const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+function linkify(text) {
+  const frag = document.createDocumentFragment(); let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    let raw = m[0].replace(/[.,;:!?)\]}]+$/, ""); // trailing punctuation stays text
+    const href = /^www\./i.test(raw) ? "https://" + raw : raw;
+    let u; try { u = new URL(href); } catch {}
+    if (!u || !/^https?:$/.test(u.protocol)) continue;
+    frag.append(document.createTextNode(text.slice(last, m.index)));
+    const a = document.createElement("a"); a.href = u.href; a.textContent = raw; a.target = "_blank"; a.rel = "noopener noreferrer";
+    frag.append(a); last = m.index + raw.length;
+  }
+  frag.append(document.createTextNode(text.slice(last)));
+  return frag;
+}
+function chatLine(who, text) {
+  const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = String(who) + ": ";
+  d.append(b, linkify(String(text))); $("log").append(d); $("log").scrollTop = 1e9;
+}
 function status(s) { $("status").textContent = s; }
 function randomId() { const b = crypto.getRandomValues(new Uint8Array(16)); return Array.from(b, x => x.toString(16).padStart(2, "0")).join(""); }
 
@@ -37,7 +57,7 @@ function setupDC(ch) {
   dc.onclose = () => { $("msg").disabled = $("send").disabled = true; };
   dc.onmessage = e => { const m = JSON.parse(e.data);
     if (m.t === "nick") { $("peer").textContent = m.nick; log(`${m.nick} joined`, "sys"); }
-    if (m.t === "msg") log(`${m.nick}: ${m.text}`); };
+    if (m.t === "msg") chatLine(m.nick, m.text); };
 }
 
 function newPC() {
@@ -172,7 +192,7 @@ async function switchMic(id) {
 $("mic").onchange = e => switchMic(e.target.value);
 $("mute").onclick = () => { muted = !muted; localStream?.getAudioTracks().forEach(t => t.enabled = !muted); $("mute").textContent = muted ? "Unmute" : "Mute"; };
 $("chat").onsubmit = e => { e.preventDefault(); const text = $("msg").value.trim();
-  if (!text || dc?.readyState !== "open") return; dc.send(JSON.stringify({ t: "msg", nick, text })); log(`${nick}: ${text}`); $("msg").value = ""; };
+  if (!text || dc?.readyState !== "open") return; dc.send(JSON.stringify({ t: "msg", nick, text })); chatLine(nick, text); $("msg").value = ""; };
 window.__sendChat = t => { $("msg").value = t; $("chat").requestSubmit(); };
 
 // Push: always on. Permission is requested inside a user gesture; subscribe silently if granted, else nothing.
