@@ -1,7 +1,7 @@
 // Connect/disconnect tones synthesised with Web Audio (no audio files).
-let ctx = null;
+let ctx = null, sinkId = null;
 function getCtx() {
-  if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ctx = new AC(); }
+  if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ctx = new AC(); if (sinkId != null) applySink(); }
   return ctx;
 }
 export function unlockAudio() { const c = getCtx(); if (c && c.state === "suspended") c.resume().catch(() => {}); }
@@ -18,3 +18,5 @@ function twoTone(f1, f2, dur = 0.35, vol = 0.18) {
 }
 export const playConnectSound = () => twoTone(440, 587.33);
 export const playDisconnectSound = () => twoTone(440, 329.63);
+function applySink() { if (ctx?.setSinkId) ctx.setSinkId(sinkId === "default" ? "" : sinkId).catch(e => console.warn("tones sink:", e.message)); }
+export function setTonesSink(id) { sinkId = id; applySink(); }

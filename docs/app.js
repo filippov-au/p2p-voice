@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=4";
-import { unlockAudio, playConnectSound, playDisconnectSound } from "./tones.js?v=4";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=4";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=5";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=5";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=5";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -137,7 +137,27 @@ async function fillMics() {
   sel.replaceChildren(...devs.map((d, i) => { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || `Microphone ${i + 1}`; return o; }));
   if (devs.some(d => d.deviceId === cur)) sel.value = cur;
   sel.hidden = !devs.length;
+  await fillOutputs(devs.length);
 }
+// Output selector (Chrome/Edge/Firefox 116+; hidden where setSinkId is unsupported, e.g. Safari/iOS)
+const sinkSupported = () => typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
+async function fillOutputs() {
+  const sel = $("spk"); if (!sinkSupported()) { sel.hidden = true; return; }
+  let devs = [];
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audiooutput"); } catch {}
+  sel.replaceChildren(...devs.map((d, i) => { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || `Speaker ${i + 1}`; return o; }));
+  const saved = localStorage.spkId;
+  if (saved && devs.some(d => d.deviceId === saved)) { sel.value = saved; await setOutput(saved, false); }
+  else if (devs.length) sel.value = devs.some(d => d.deviceId === "default") ? "default" : devs[0].deviceId;
+  sel.hidden = devs.length < 1;
+}
+async function setOutput(id, remember = true) {
+  try { await $("remote").setSinkId(id === "default" ? "" : id); }
+  catch (e) { log("Output switch failed: " + e.message, "sys"); return; }
+  try { setTonesSink(id); } catch {}
+  if (remember) { localStorage.spkId = id; log("output: " + ($("spk").selectedOptions[0]?.textContent || id), "sys"); }
+}
+$("spk").onchange = e => setOutput(e.target.value);
 async function switchMic(id) {
   let ns;
   try { ns = await getMic(id); }

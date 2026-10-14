@@ -7,6 +7,7 @@ Open the site, click **Create room**, share the link (room secret is in the URL 
 ## Features
 - **Screen Wake Lock** (`docs/wakelock.js`): screen stays on while the call is connected; re-acquired when the tab becomes visible again.
 - **Microphone selector**: pick the input device in the room; switches live via replaceTrack (mute kept), remembered in localStorage, falls back to default if missing.
+- **Output selector**: speaker/headphones via `setSinkId` (remote audio + tones), remembered; hidden where unsupported (Safari/iOS, old Firefox).
 - **Tones** (`docs/tones.js`): Web Audio connect (440→587 Hz) / disconnect (440→330 Hz) beeps, no audio files.
 - **Web Push** (`docs/sw.js`, `docs/push.js`, `docs/manifest.webmanifest`, `worker/src/webpush.js`): always on, no toggle. Permission is asked on the **Create room** click (or the first tap in a room opened from a link); if granted, the browser subscribes silently, if denied nothing happens. When somebody else joins that room you get a push even if the tab is closed. iOS: Safari 16.4+, only after "Add to Home Screen" and opening from the icon.
 
