@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=3";
-import { unlockAudio, playConnectSound, playDisconnectSound } from "./tones.js?v=3";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=3";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=4";
+import { unlockAudio, playConnectSound, playDisconnectSound } from "./tones.js?v=4";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=4";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -11,12 +11,12 @@ function log(text, cls = "") { const d = document.createElement("div"); d.classN
 function status(s) { $("status").textContent = s; }
 function randomId() { const b = crypto.getRandomValues(new Uint8Array(16)); return Array.from(b, x => x.toString(16).padStart(2, "0")).join(""); }
 
-function audioConstraints() {
-  return { echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+function audioConstraints(deviceId) {
+  return { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true,
     channelCount: 1, sampleRate: 48000, latency: 0 };
 }
-async function getMic() {
-  const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
+async function getMic(deviceId) {
+  const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(deviceId), video: false });
   s.getAudioTracks().forEach(t => { t.enabled = !muted; t.contentHint = "speech"; });
   return s;
 }
@@ -103,7 +103,14 @@ async function join(room) {
   }
   $("lobby").hidden = true; $("room").hidden = false; $("link").value = location.href;
   nick = localStorage.nick || prompt("Nickname?", "player") || "player"; localStorage.nick = nick;
-  try { localStream = await getMic(); } catch (e) { log("Mic error: " + e.message, "sys"); return; }
+  const saved = localStorage.micId || "";
+  try { localStream = await getMic(saved); }
+  catch (e) {
+    if (saved) { delete localStorage.micId; try { localStream = await getMic(); } catch (e2) { log("Mic error: " + e2.message, "sys"); return; } }
+    else { log("Mic error: " + e.message, "sys"); return; }
+  }
+  await fillMics();
+  navigator.mediaDevices.addEventListener?.("devicechange", () => fillMics().catch(() => {}));
   ws = new WebSocket(SIGNAL + room + "?cid=" + clientId());
   ws.onmessage = e => onSignal(JSON.parse(e.data));
   ws.onclose = e => { status(e.code === 1006 && !pc ? "room full or signaling down" : "signaling closed"); };
@@ -121,6 +128,28 @@ $("create").onclick = () => {
   history.pushState(null, "", "#" + id); route();               // navigate immediately, no reload
 };
 $("copy").onclick = () => navigator.clipboard.writeText(location.href);
+// Microphone selector
+const curMicId = () => localStream?.getAudioTracks()[0]?.getSettings?.().deviceId || "";
+async function fillMics() {
+  const sel = $("mic"); let devs = [];
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch {}
+  const cur = curMicId();
+  sel.replaceChildren(...devs.map((d, i) => { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || `Microphone ${i + 1}`; return o; }));
+  if (devs.some(d => d.deviceId === cur)) sel.value = cur;
+  sel.hidden = !devs.length;
+}
+async function switchMic(id) {
+  let ns;
+  try { ns = await getMic(id); }
+  catch (e) { log("Mic switch failed: " + e.message, "sys"); $("mic").value = curMicId(); return; }
+  const t = ns.getAudioTracks()[0];
+  try { const sender = pc?.getSenders().find(s => s.track?.kind === "audio") || pc?.getSenders()[0];
+    if (sender) await sender.replaceTrack(t); }
+  catch (e) { log("Mic switch failed: " + e.message, "sys"); ns.getTracks().forEach(x => x.stop()); return; }
+  localStream?.getTracks().forEach(x => x.stop()); localStream = ns;
+  localStorage.micId = id; log("mic: " + (t.label || id), "sys");
+}
+$("mic").onchange = e => switchMic(e.target.value);
 $("mute").onclick = () => { muted = !muted; localStream?.getAudioTracks().forEach(t => t.enabled = !muted); $("mute").textContent = muted ? "Unmute" : "Mute"; };
 $("chat").onsubmit = e => { e.preventDefault(); const text = $("msg").value.trim();
   if (!text || dc?.readyState !== "open") return; dc.send(JSON.stringify({ t: "msg", nick, text })); log(`${nick}: ${text}`); $("msg").value = ""; };

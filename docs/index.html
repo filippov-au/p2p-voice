@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>P2P Voice</title><link rel="stylesheet" href="style.css?v=3">
+<title>P2P Voice</title><link rel="stylesheet" href="style.css?v=4">
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#16181d">
 <link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <h1>P2P Voice</h1>
@@ -7,11 +7,11 @@
 <div id="room" hidden>
  <p>Room link (share it): <input id="link" readonly size="60"> <button id="copy">Copy</button></p>
  <p>Status: <b id="status">idle</b> · Peer: <b id="peer">—</b></p>
- <p><button id="mute">Mute</button></p>
+ <p><button id="mute">Mute</button> <select id="mic" hidden title="Microphone"></select></p>
  <p><small id="notifyinfo" hidden>Чтобы получать уведомления на iPhone, добавьте сайт на экран «Домой» и откройте его с иконки.</small></p>
  <div id="stats">RTT: <b id="rtt">—</b> ms · Loss: <b id="loss">—</b> · Jitter: <b id="jitter">—</b> ms · Codec: <b id="codec">—</b></div>
  <div id="log"></div>
  <form id="chat"><input id="msg" autocomplete="off" placeholder="Message…" disabled><button disabled id="send">Send</button></form>
  <audio id="remote" autoplay></audio>
 </div>
-<script src="app.js?v=3" type="module"></script></body></html>
+<script src="app.js?v=4" type="module"></script></body></html>
