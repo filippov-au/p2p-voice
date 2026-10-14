@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>P2P Voice</title><link rel="stylesheet" href="style.css?v=8">
+<title>P2P Voice</title><link rel="stylesheet" href="style.css?v=9">
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2b2e33">
 <link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0"/></filter></svg>
@@ -34,11 +34,11 @@
   </div>
   <p class="note"><small id="notifyinfo" hidden>Чтобы получать уведомления на iPhone, добавьте сайт на экран «Домой» и откройте его с иконки.</small></p>
 
-  <canvas id="chart" class="screen"></canvas>
-  <div id="log" class="screen"></div>
+  <div class="signal"><span class="plate">Signal</span><canvas id="chart" class="screen"></canvas></div>
+  <span class="plate">Chat</span><div id="log" class="screen"></div>
   <form id="chat"><input id="msg" autocomplete="off" placeholder="Message…" disabled><button disabled id="send" class="btn">Send</button></form>
   <audio id="remote" autoplay></audio>
  </div>
 </main>
 <script src="app.js?v=7" type="module"></script>
-<script src="ui.js?v=8" type="module"></script></body></html>
+<script src="ui.js?v=9" type="module"></script></body></html>

@@ -60,3 +60,10 @@ select{flex:1 1 140px;min-width:0;height:44px;padding:0 12px;border-radius:10px;
 #log a{color:#8fd6ff;text-decoration:underline;word-break:break-all}#log a:hover{color:#bfe6ff}
 #chat{display:flex;gap:8px;min-width:0}
 @media (min-width:700px){.radio{margin-top:48px;padding:24px 28px 28px}h1{font-size:24px}.lcd-row{font-size:18px}}
+.signal{display:none;margin-top:12px}
+body.peer-on .signal{display:block}
+#chart{height:46px;margin-top:0}
+#log{margin-top:0}
+#log:empty::before{content:"No messages yet";color:#4f6a45;font-style:italic}
+.screen+.plate,.note+.plate{margin-top:12px}
+.signal+.plate{margin-top:14px}

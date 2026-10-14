@@ -18,3 +18,7 @@ $("link").addEventListener("focus", e => e.target.select());
 // Reflect mute state for styling (app.js toggles the label text).
 const m = $("mute");
 new MutationObserver(() => m.classList.toggle("muted", m.textContent.trim() === "Unmute")).observe(m, { childList: true, characterData: true, subtree: true });
+// Show SIGNAL graph only while a peer is connected (status text set by app.js).
+const st = $("status");
+const sync = () => document.body.classList.toggle("peer-on", st.textContent.trim() === "connected");
+new MutationObserver(sync).observe(st, { childList: true, characterData: true, subtree: true }); sync();
