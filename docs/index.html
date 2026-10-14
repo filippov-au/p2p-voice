@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>P2P Voice BETA</title><link rel="stylesheet" href="style.css?v=b1">
+<title>P2P Voice BETA</title><link rel="stylesheet" href="style.css?v=b2">
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2b2e33">
 <link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0"/></filter></svg>
@@ -14,8 +14,8 @@
  <div class="grille" aria-hidden="true"></div>
 
  <div id="lobby"><div class="lcd lcd-lobby"><span>NO CHANNEL</span><span class="blink">READY_</span></div>
-  <button id="create" class="ptt">Create room (1:1)</button>
-  <button id="creategroup" class="ptt">Create group (up to 5)</button></div>
+  <div class="room-btns"><button id="create" class="ptt" aria-label="Create room (1:1)">1:1</button>
+  <button id="creategroup" class="ptt" aria-label="Create group (up to 5)">Group · 5</button></div></div>
 
  <div id="room" hidden>
   <div class="lcd">
