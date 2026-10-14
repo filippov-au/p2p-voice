@@ -1,4 +1,4 @@
-name = "p2p-voice-signal"
+name = "p2p-voice-signal-v2"
 main = "src/index.js"
 compatibility_date = "2026-01-01"
 account_id = "ed47ab3e2ac01814ebcc905a9ccb6668"
@@ -12,6 +12,6 @@ tag = "v1"
 new_sqlite_classes = ["Room"]
 
 [vars]
-VAPID_PUBLIC_KEY = "BMMAxAdUe3kE37mWKMi-MsQ6btod1B-sgRnXchOca2ZaImueApgoEjVN11wfjpth4QlcS2TuOK0zBT4WeiN3T10"
+VAPID_PUBLIC_KEY = "BF3xEG7AOtuymb-8UsFZuXu1sWPucce77tSIpzDGuXzsQiKl1fp3PcU34rCVo10yS_PItcjVWUSxiAUBjT-y0ss"
 VAPID_SUBJECT = "mailto:tmn.sun@gmail.com"
 # VAPID_PRIVATE_KEY is a secret: npx wrangler secret put VAPID_PRIVATE_KEY
