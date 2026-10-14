@@ -1,5 +1,5 @@
 # p2p-voice
-Low-latency P2P voice + text chat for gaming (2 peers). WebRTC Opus mono 48k, ~40 kbps, 10 ms ptime, FEC+DTX; chat over DataChannel; public STUN only (no TURN). Echo cancellation, noise suppression and auto gain are always on.
+P2P voice + text chat for gaming (2 peers), tuned for stability over latency: WebRTC Opus mono 48k, ~48 kbps, 20 ms ptime (maxptime 40), in-band FEC on, DTX off, ~80 ms receiver jitter buffer (`jitterBufferTarget`, fallback `playoutDelayHint`), sender priority high; chat over DataChannel; public STUN only (no TURN). Echo cancellation, noise suppression and auto gain are always on.
 - `docs/` — static frontend (GitHub Pages).
 - `worker/` — Cloudflare Worker + Durable Object signaling (`/room/<id>` WebSocket, max 2 peers).
 Open the site, click **Create room**, share the link (room secret is in the URL hash).
@@ -8,6 +8,9 @@ Open the site, click **Create room**, share the link (room secret is in the URL 
 - **Screen Wake Lock** (`docs/wakelock.js`): screen stays on while the call is connected; re-acquired when the tab becomes visible again.
 - **Microphone selector**: pick the input device in the room; switches live via replaceTrack (mute kept), remembered in localStorage, falls back to default if missing.
 - **Output selector**: speaker/headphones via `setSinkId` (remote audio + tones), remembered; hidden where unsupported (Safari/iOS, old Firefox).
+- **Network chart**: canvas with loss %, concealed-samples % (inbound `concealedSamples/totalSamplesReceived`, the best measure of audible dropouts), RTT and jitter over the last 60 s.
+- **Auto ICE restart**: if the connection stays `disconnected` for 4 s (or goes `failed`), the original caller sends an ICE-restart offer over signaling (up to 5 tries); the callee renegotiates on the same PeerConnection.
+- **FEC note**: browsers don't expose Opus `packet-loss-percentage`; with `useinbandfec=1` Chrome's encoder enables FEC and sizes it automatically from RTCP loss reports, so FEC only kicks in once loss is actually observed.
 - **Chat links**: http(s) and www.* URLs become safe links (new tab, noopener noreferrer).
 - **Tones** (`docs/tones.js`): Web Audio connect (440→587 Hz) / disconnect (440→330 Hz) beeps, no audio files.
 - **Web Push** (`docs/sw.js`, `docs/push.js`, `docs/manifest.webmanifest`, `worker/src/webpush.js`): always on, no toggle. Permission is asked on the **Create room** click (or the first tap in a room opened from a link); if granted, the browser subscribes silently, if denied nothing happens. When somebody else joins that room you get a push even if the tab is closed. iOS: Safari 16.4+, only after "Add to Home Screen" and opening from the icon.
