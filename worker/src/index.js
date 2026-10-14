@@ -46,7 +46,19 @@ export default {
   },
 };
 
+const STALE_MS = 15000, PING = '{"type":"ping"}', PONG = '{"type":"pong"}';
 export class Room extends DurableObject {
+  constructor(ctx, env) { super(ctx, env); ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG)); }
+  info(ws) { return ws.deserializeAttachment() || {}; }
+  live() { return this.ctx.getWebSockets().filter(w => !this.info(w).gone); }
+  lastSeen(ws) { return Math.max(this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() || 0, this.info(ws).seen || 0); }
+  drop(ws) {
+    const a = this.info(ws); if (a.gone) return;
+    ws.serializeAttachment({ ...a, gone: true }); try { ws.close(4001, "gone"); } catch {}
+    for (const p of this.live()) try { p.send(JSON.stringify({ type: "peer-left", id: a.id })); } catch {}
+  }
+  evictStale() { const now = Date.now(); for (const ws of this.live()) if (now - this.lastSeen(ws) > STALE_MS) this.drop(ws); }
+  async alarm() { this.evictStale(); if (this.live().length) await this.ctx.storage.setAlarm(Date.now() + 2000); }
   // Push subscriptions live in DO storage ("sub:<endpoint>") and survive the room being empty.
   async subscribe(subscription, clientId) {
     await this.ctx.storage.put("sub:" + subscription.endpoint, { subscription, clientId, ts: Date.now() });
@@ -75,34 +87,35 @@ export class Room extends DurableObject {
     }));
   }
   async fetch(req) {
-    const peers = this.ctx.getWebSockets();
-    if (peers.length >= 2) return new Response("Room full", { status: 403 });
     const roomId = req.headers.get("X-Room-Id");
     const cidParam = new URL(req.url).searchParams.get("cid") || "";
     const cid = CID_RE.test(cidParam) ? cidParam : null;
+    this.evictStale();
+    if (cid) for (const ws of this.live()) if (this.info(ws).cid === cid) this.drop(ws); // same client rejoining
+    const peers = this.live();
+    if (peers.length >= 2) return new Response("Room full", { status: 403 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     const id = crypto.randomUUID();
     this.ctx.acceptWebSocket(server, [id]);
-    server.serializeAttachment({ id, cid });
+    server.serializeAttachment({ id, cid, seen: Date.now() });
     server.send(JSON.stringify({ type: "welcome", id, peers: peers.map(p => p.deserializeAttachment()?.id) }));
     for (const p of peers) p.send(JSON.stringify({ type: "peer-joined", id }));
+    if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + 2000);
     if (roomId) this.ctx.waitUntil(this.notifyOthers(roomId, cid));
     return new Response(null, { status: 101, webSocket: client });
   }
   async webSocketMessage(ws, msg) {
     if (typeof msg !== "string" || msg.length > 65536) return;
     let data; try { data = JSON.parse(msg); } catch { return; }
+    { const a = this.info(ws); if (a.gone) return; ws.serializeAttachment({ ...a, seen: Date.now() }); }
+    if (data.type === "ping") { ws.send(PONG); return; }
     if (!["offer", "answer", "ice", "hello"].includes(data.type)) return;
     data.from = ws.deserializeAttachment()?.id;
     const out = JSON.stringify(data);
-    for (const p of this.ctx.getWebSockets()) if (p !== ws) p.send(out);
+    for (const p of this.live()) if (p !== ws) p.send(out);
   }
-  async webSocketClose(ws) { this.left(ws); }
-  async webSocketError(ws) { this.left(ws); }
-  left(ws) {
-    const id = ws.deserializeAttachment()?.id;
-    try { ws.close(1000); } catch {}
-    for (const p of this.ctx.getWebSockets()) if (p !== ws) try { p.send(JSON.stringify({ type: "peer-left", id })); } catch {}
-  }
+  async webSocketClose(ws) { this.drop(ws); }
+  async webSocketError(ws) { this.drop(ws); }
+
 }

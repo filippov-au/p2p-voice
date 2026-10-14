@@ -173,6 +173,23 @@ async function stats() {
   window.__stats = out;
 }
 
+// Signaling keepalive: ping every 5 s; reconnect if no pong for > 10 s or the socket drops.
+let lastPong = 0, roomId = null, reconnectTimer = null, wsFails = 0;
+function connectWS() {
+  clearTimeout(reconnectTimer);
+  const sock = ws = new WebSocket(SIGNAL + roomId + "?cid=" + clientId());
+  sock.onmessage = e => { if (sock !== ws) return; const m = JSON.parse(e.data); if (m.type === "pong") { lastPong = Date.now(); return; } wsFails = 0; onSignal(m); };
+  sock.onopen = () => { lastPong = Date.now(); if (!pc) status("signaling connected"); };
+  sock.onclose = e => { if (sock !== ws) return;
+    if (e.code === 1006 && !pc && ++wsFails >= 3) { status("room full or signaling down"); return; }
+    if (!pc || pc.connectionState !== "connected") status("signaling lost, reconnecting…");
+    reconnectTimer = setTimeout(connectWS, 1500); };
+}
+function keepalive() {
+  if (!ws || ws.readyState !== 1) return;
+  if (Date.now() - lastPong > 10000) { const old = ws; ws = null; try { old.close(); } catch {} connectWS(); return; }
+  ws.send('{"type":"ping"}');
+}
 async function join(room) {
   window.__room = room;
   const ios = /iP(hone|ad|od)/.test(navigator.userAgent), standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
@@ -192,10 +209,7 @@ async function join(room) {
   }
   await fillMics();
   navigator.mediaDevices.addEventListener?.("devicechange", () => fillMics().catch(() => {}));
-  ws = new WebSocket(SIGNAL + room + "?cid=" + clientId());
-  ws.onmessage = e => onSignal(JSON.parse(e.data));
-  ws.onclose = e => { status(e.code === 1006 && !pc ? "room full or signaling down" : "signaling closed"); };
-  ws.onopen = () => status("signaling connected");
+  roomId = room; connectWS(); setInterval(keepalive, 5000);
   statsTimer = setInterval(stats, 1000);
 }
 
