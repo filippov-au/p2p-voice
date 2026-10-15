@@ -1,8 +1,11 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p13";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p13";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p13";
-const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p14";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p14";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p14";
+// Signaling servers in priority order (self-hosted server/ first, then the Cloudflare Worker). Everyone uses the
+// same order, so peers meet on the first reachable one; after 2 failures in a row the client moves to the next.
+const SIGNALS = ["wss://138-201-154-35.sslip.io/room/", "wss://p2p-voice-signal.tmn-sun.workers.dev/room/"];
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
+let iceExtra = []; // TURN/STUN handed out by the signaling server in "welcome"
 const $ = id => document.getElementById(id);
 let ws, localStream, nick, muted = false, statsTimer, myId = null, roomKind = "1:1", roomMax = 2, roomFull = false;
 
@@ -84,7 +87,7 @@ function peerOf(id, nickName) {
   let p = peers.get(id);
   if (p) { if (nickName) p.nick = nickName; return p; }
   p = { id, nick: nickName || "", up: false, restarts: 0, offerer: false, prev: null, st: {} };
-  const pc = p.pc = new RTCPeerConnection({ iceServers: ICE, bundlePolicy: "max-bundle", rtcpMuxPolicy: "require" });
+  const pc = p.pc = new RTCPeerConnection({ iceServers: [...iceExtra, ...ICE], bundlePolicy: "max-bundle", rtcpMuxPolicy: "require" });
   localStream.getAudioTracks().forEach(t => pc.addTrack(t, localStream));
   p.audio = document.createElement("audio"); p.audio.autoplay = true; p.audio.dataset.peer = id; $("audios").append(p.audio);
   p.audio.volume = +(localStorage["vol:" + (p.nick || id)] ?? 1);
@@ -163,7 +166,7 @@ async function onSignal(m) {
   if (m.type === "pong") { lastPong = Date.now(); return; }
   if (m.type === "full") { roomFull = true; roomMax = m.max; for (const id of [...peers.keys()]) removePeer(id); status(`room full (max ${m.max})`); window.__state = "full"; return; }
   if (m.type === "welcome") {
-    myId = m.id; roomKind = m.kind; roomMax = m.max; document.body.classList.toggle("group", roomKind === "group");
+    myId = m.id; iceExtra = Array.isArray(m.ice) ? m.ice : []; roomKind = m.kind; roomMax = m.max; document.body.classList.toggle("group", roomKind === "group");
     $("roomkind").textContent = roomKind === "group" ? `GROUP · up to ${roomMax}` : "1:1";
     for (const id of [...peers.keys()]) removePeer(id); // fresh session after reconnect
     refreshCall();
@@ -302,18 +305,24 @@ setInterval(() => { screenStats().catch(() => {}); updateShareBtn(); }, 1000);
 
 // ---------- Signaling WebSocket with keepalive + auto-reconnect ----------
 let lastPong = 0, pingTimer = null, reconnectTimer = null, roomId = null;
+let sigIdx = 0, sigFails = 0, sockOpenedAt = 0;
+function sigFailed() { // a socket died: count it unless it had been healthy for a minute
+  if (sockOpenedAt && Date.now() - sockOpenedAt > 60000) sigFails = 0;
+  if (++sigFails >= 2 && SIGNALS.length > 1) { sigIdx = (sigIdx + 1) % SIGNALS.length; sigFails = 0; log("signaling: trying " + new URL(SIGNALS[sigIdx]).host, "sys"); }
+}
 function connectWS() {
-  clearTimeout(reconnectTimer);
-  const sock = ws = new WebSocket(SIGNAL + roomId + "?cid=" + clientId() + "&nick=" + encodeURIComponent(nick));
+  clearTimeout(reconnectTimer); sockOpenedAt = 0;
+  const sock = ws = new WebSocket(SIGNALS[sigIdx] + roomId + "?cid=" + clientId() + "&nick=" + encodeURIComponent(nick));
+  setTimeout(() => { if (sock === ws && sock.readyState === 0) sock.close(); }, 8000); // blocked handshakes can hang
   sock.onmessage = e => { if (sock === ws) { let m; try { m = JSON.parse(e.data); } catch { return; } onSignal(m).catch(err => console.warn(err)); } };
-  sock.onopen = () => { lastPong = Date.now(); status("signaling connected"); };
+  sock.onopen = () => { lastPong = sockOpenedAt = Date.now(); status("signaling connected"); };
   sock.onclose = () => { if (sock !== ws) return; if (roomFull) return;
-    status("signaling lost, reconnecting…"); reconnectTimer = setTimeout(connectWS, 1500); };
+    status("signaling lost, reconnecting…"); sigFailed(); reconnectTimer = setTimeout(connectWS, 1500); };
 }
 function keepalive() {
   if (!ws || roomFull) return;
   if (ws.readyState === 1) {
-    if (Date.now() - lastPong > 10000) { const old = ws; ws = null; try { old.close(); } catch {} status("signaling lost, reconnecting…"); connectWS(); return; }
+    if (Date.now() - lastPong > 10000) { const old = ws; ws = null; try { old.close(); } catch {} status("signaling lost, reconnecting…"); sigFailed(); connectWS(); return; }
     ws.send('{"type":"ping"}');
   }
 }

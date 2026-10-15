@@ -13,6 +13,11 @@ function cors(req) {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400", Vary: "Origin" };
 }
+function safeEq(a, b) {
+  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
+  if (x.length !== y.length) return false;
+  let d = 0; for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i]; return d === 0;
+}
 const json = (req, obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...cors(req) } });
 
 export default {
@@ -36,6 +41,14 @@ export default {
         let b; try { b = await req.json(); } catch { return json(req, { error: "bad json" }, 400); }
         if (!ROOM_RE.test(b?.roomId || "") || typeof b?.endpoint !== "string") return json(req, { error: "invalid" }, 400);
         return json(req, { ok: true, ...(await env.ROOM.get(env.ROOM.idFromName(b.roomId)).unsubscribe(b.endpoint)) });
+      }
+      // Called by the self-hosted signaling server (server/) when someone joins a room there.
+      if (url.pathname === "/api/push/joined" && req.method === "POST") {
+        if (!env.NOTIFY_SECRET || !safeEq(req.headers.get("Authorization") || "", "Bearer " + env.NOTIFY_SECRET)) return json(req, { error: "forbidden" }, 403);
+        let b; try { b = await req.json(); } catch { return json(req, { error: "bad json" }, 400); }
+        if (!ROOM_RE.test(b?.roomId || "") || (b.clientId != null && !CID_RE.test(b.clientId))) return json(req, { error: "invalid" }, 400);
+        await env.ROOM.get(env.ROOM.idFromName(b.roomId)).notifyOthers(b.roomId, b.clientId ?? null);
+        return json(req, { ok: true });
       }
       return json(req, { error: "not found" }, 404);
     }

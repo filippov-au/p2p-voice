@@ -1,0 +1,13 @@
+{
+  "name": "p2p-voice-signal-node",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node test/signal.test.mjs"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  }
+}

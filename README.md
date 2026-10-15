@@ -6,6 +6,7 @@ P2P voice + text chat for gaming (2 peers), tuned for stability over latency: We
 - Beta 1:1 rooms: game-oriented screen share («Показать экран», desktop only): getDisplayMedia 60 fps/1080p + system audio, contentHint motion, VP9>H264>VP8, maintain-framerate, 6 Mbps; game audio on its own track (not voice-munged); viewer video with fullscreen + game-audio slider; perfect-negotiation renegotiation.
 
 - `worker/` — Cloudflare Worker + Durable Object signaling (`/room/<id>` WebSocket, max 2 peers).
+- `server/` — self-hosted signaling (same WS protocol, Node + `ws`) + coturn TURN, for networks where Cloudflare is throttled (Russia). Prod: `wss://138-201-154-35.sslip.io/room/` (Hetzner VPS). The client (`SIGNALS` in `docs/app.js`) tries it first and moves to the Worker after 2 failures in a row; the server sends short-lived TURN credentials (TURN REST API) in `welcome.ice`.
 Open the site, click **Create room**, share the link (room secret is in the URL hash).
 
 ## Features
@@ -39,3 +40,12 @@ npm test                     # RFC 8291 encryption vector + VAPID JWT check
 npx wrangler@3 deploy
 ```
 For `wrangler dev`, copy `.dev.vars.example` to `.dev.vars`. Rotating keys invalidates existing subscriptions (users get re-subscribed on their next visit).
+
+## Self-hosted signaling + TURN (`server/`)
+Fresh Ubuntu VPS, as root, from a repo checkout:
+```sh
+PUSH_NOTIFY_SECRET=<same as the Worker NOTIFY_SECRET> bash server/deploy/setup.sh [domain]   # default domain: <ip>.sslip.io
+```
+Installs the signaling service (systemd `p2p-voice-signal`, 127.0.0.1:8787) behind Caddy (auto HTTPS), coturn on 3478 udp/tcp (relay ports 49152–65535/udp) and ufw rules. Config and secrets live in `/etc/p2p-voice.env` (kept across re-runs). To update the code, copy `server/` to the VPS and re-run the script. Tests: `cd server && npm test`.
+
+Push for joins on the VPS: the server calls the Worker endpoint `POST /api/push/joined` with `Authorization: Bearer <NOTIFY_SECRET>`. Set it with `npx wrangler secret put NOTIFY_SECRET` and redeploy the Worker.

@@ -1,3 +1,8 @@
+@font-face{font-family:"Barlow Condensed";font-style:italic;font-weight:700;font-display:swap;src:url(fonts/barlow-condensed-700i.woff2) format("woff2")}
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-condensed-500.woff2) format("woff2")}
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-condensed-600.woff2) format("woff2")}
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-condensed-700.woff2) format("woff2")}
+@font-face{font-family:"VT323";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/vt323-400.woff2) format("woff2")}
 *,*::before,*::after{box-sizing:border-box}
 :root{
  --bumper-hi:#ffd659;--bumper:#f0b91c;--bumper-lo:#a87a06;
