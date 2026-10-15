@@ -137,10 +137,11 @@ export class Room extends DurableObject {
     if (typeof msg !== "string" || msg.length > 65536) return;
     let data; try { data = JSON.parse(msg); } catch { return; }
     if (data.type === "ping") { ws.send(PONG); return; }
-    if (!["offer", "answer", "ice"].includes(data.type) || typeof data.to !== "string") return;
+    if (!["offer", "answer", "ice"].includes(data.type)) return;
     data.from = a.id;
     const out = JSON.stringify(data);
-    for (const p of this.live()) if (p !== ws && this.info(p).id === data.to) p.send(out);
+    // Legacy clients (pre-mesh) send without "to": relay to everyone else (only meaningful in 1:1 rooms).
+    for (const p of this.live()) if (p !== ws && (typeof data.to !== "string" || this.info(p).id === data.to)) p.send(out);
   }
   async webSocketClose(ws) { this.drop(ws, "closed"); }
   async webSocketError(ws) { this.drop(ws, "error"); }

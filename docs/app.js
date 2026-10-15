@@ -244,6 +244,7 @@ async function startShare() {
 async function stopShare() {
   const st = screen.stream; if (!st) return;
   const p = screen.peer; screen.stream = null; screen.peer = null;
+  updateShareBtn(); $("screenstat").hidden = true;
   st.getTracks().forEach(t => t.stop());
   if (p && peers.get(p.id) === p && p.pc.signalingState !== "closed") {
     for (const s of screen.senders) try { p.pc.removeTrack(s); } catch {}
