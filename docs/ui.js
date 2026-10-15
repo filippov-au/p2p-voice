@@ -20,5 +20,11 @@ const m = $("mute");
 new MutationObserver(() => m.classList.toggle("muted", m.textContent.trim() === "Unmute")).observe(m, { childList: true, characterData: true, subtree: true });
 // Show SIGNAL graph only while a peer is connected (status text set by app.js).
 const st = $("status");
-const sync = () => document.body.classList.toggle("peer-on", st.textContent.trim() === "connected");
-new MutationObserver(sync).observe(st, { childList: true, characterData: true, subtree: true }); sync();
+// Link LED: green when a peer is up, amber while connecting/waiting, red on lost/full.
+const sync = () => {
+  const t = st.textContent.trim(), on = t === "connected", bad = /lost|full|fail|error/i.test(t), b = document.body.classList;
+  b.toggle("peer-on", on); b.toggle("link-on", on); b.toggle("link-bad", !on && bad);
+  b.toggle("link-wait", !on && !bad && !$("room").hidden);
+};
+new MutationObserver(sync).observe(st, { childList: true, characterData: true, subtree: true });
+new MutationObserver(sync).observe($("room"), { attributes: true, attributeFilter: ["hidden"] }); sync();

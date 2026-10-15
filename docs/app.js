@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p12";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p12";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p12";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p13";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p13";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p13";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
