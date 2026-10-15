@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=b3";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=b3";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=b3";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=b4";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=b4";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=b4";
 const SIGNAL = "wss://p2p-voice-signal-v2.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -142,13 +142,15 @@ async function offerTo(p, restart = false) {
 // (higher peer id) rolls back, the impolite side ignores the incoming offer. Voice roles (offerer/ICE restart) unchanged.
 async function renegotiate(p) {
   if (!p || p.pc.signalingState === "closed") return;
-  p.makingOffer = true;
+  if (p.makingOffer || p.pc.signalingState !== "stable") { p.pendingReneg = true; return; } // run again once stable
+  p.makingOffer = true; p.pendingReneg = false;
   try { const o = await p.pc.createOffer(); o.sdp = mungeOpus(o.sdp);
-    if (p.pc.signalingState !== "stable") return;
+    if (p.pc.signalingState !== "stable") { p.pendingReneg = true; return; }
     await p.pc.setLocalDescription(o); send({ type: "offer", to: p.id, sdp: o.sdp, reneg: true }); }
   catch (e) { console.warn("renegotiate:", e.message); }
   finally { p.makingOffer = false; }
 }
+function flushReneg(p) { if (p?.pendingReneg && p.pc.signalingState === "stable") renegotiate(p); }
 async function iceRestart(p) {
   if (peers.get(p.id) !== p || p.pc.connectionState === "connected" || ws?.readyState !== 1 || p.restarts >= 5) return;
   p.restarts++; log(`reconnecting ${p.nick || "peer"} (ICE restart ${p.restarts})…`, "sys");
@@ -180,7 +182,8 @@ async function onSignal(m) {
       await p.pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
       const a = await p.pc.createAnswer(); a.sdp = mungeOpus(a.sdp); await p.pc.setLocalDescription(a);
       send({ type: "answer", to: m.from, sdp: a.sdp });
-      if (collision && screen.peer === p) renegotiate(p); // our rolled-back change goes again
+      if (collision) p.pendingReneg = true; // our rolled-back change goes again
+      flushReneg(p);
       return;
     }
     if (p && !m.restart && (p.offerer || p.pc.remoteDescription)) { removePeer(m.from); p = null; }
@@ -188,7 +191,7 @@ async function onSignal(m) {
     await p.pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
     const a = await p.pc.createAnswer(); a.sdp = mungeOpus(a.sdp); await p.pc.setLocalDescription(a);
     send({ type: "answer", to: m.from, sdp: a.sdp });
-  } else if (m.type === "answer") { const p = peers.get(m.from); if (p && p.pc.signalingState === "have-local-offer") { await p.pc.setRemoteDescription({ type: "answer", sdp: m.sdp }); if (screen.senders.length) tuneScreenSenders(); } }
+  } else if (m.type === "answer") { const p = peers.get(m.from); if (p && p.pc.signalingState === "have-local-offer") { await p.pc.setRemoteDescription({ type: "answer", sdp: m.sdp }); if (screen.senders.length) tuneScreenSenders(); flushReneg(p); } }
   else if (m.type === "ice") { const p = peers.get(m.from); if (p) try { await p.pc.addIceCandidate(m.candidate); } catch (e) { console.warn(e); } }
 }
 
