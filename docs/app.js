@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p11";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p11";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p11";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p12";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p12";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p12";
 const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -94,7 +94,7 @@ function peerOf(id, nickName) {
     const st = e.streams[0];
     // First audio stream = voice. Any other stream (video and/or game audio) = screen share.
     if (e.track.kind === "audio" && (!p.voiceStreamId || p.voiceStreamId === st?.id)) {
-      p.voiceStreamId = st?.id; p.audio.srcObject = st; setBuffer(e.receiver); p.audio.play().catch(() => {}); return;
+      p.voiceStreamId = st?.id; p.voiceTrackId = e.track.id; p.audio.srcObject = st; setBuffer(e.receiver); p.audio.play().catch(() => {}); return;
     }
     if (st) showRemoteScreen(p, st, e.track);
   };
@@ -281,7 +281,11 @@ $("gamevol").oninput = e => { const v = $("screenvideo"); v.muted = false; v.vol
 async function screenStats() {
   const p = screen.stream ? screen.peer : [...peers.values()].find(x => x.viewing);
   if (!p) { $("screenstat").hidden = true; return; }
-  const sending = !!screen.stream, r = await p.pc.getStats(); let cur = null;
+  const sending = !!screen.stream; let cur = null;
+  const vs = sending ? screen.senders.find(s => s.track?.kind === "video") : null;
+  const vt = sending ? null : $("screenvideo").srcObject?.getVideoTracks()[0];
+  const rcv = vt && p.pc.getReceivers().find(r => r.track === vt);
+  const r = vs ? await vs.getStats() : rcv ? await rcv.getStats() : null; if (!r) return;
   r.forEach(s => {
     if (s.kind !== "video") return;
     if (sending && s.type === "outbound-rtp" && s.bytesSent) cur = { w: s.frameWidth, h: s.frameHeight, fps: s.framesPerSecond, bytes: s.bytesSent, ts: s.timestamp, lim: s.qualityLimitationReason };
@@ -340,7 +344,7 @@ async function peerStats(p) {
   const r = await p.pc.getStats(); const out = {}; const codecs = {};
   r.forEach(s => {
     if (s.type === "candidate-pair" && s.nominated && s.state === "succeeded" && s.currentRoundTripTime != null) out.rtt = s.currentRoundTripTime * 1000;
-    if (s.type === "inbound-rtp" && s.kind === "audio") { out.lost = s.packetsLost; out.recv = s.packetsReceived; out.jitter = s.jitter * 1000; out.codecId = s.codecId; out.conc = s.concealedSamples; out.tot = s.totalSamplesReceived; }
+    if (s.type === "inbound-rtp" && s.kind === "audio" && (!p.voiceTrackId || !s.trackIdentifier || s.trackIdentifier === p.voiceTrackId)) { out.lost = s.packetsLost; out.recv = s.packetsReceived; out.jitter = s.jitter * 1000; out.codecId = s.codecId; out.conc = s.concealedSamples; out.tot = s.totalSamplesReceived; }
     if (s.type === "codec") codecs[s.id] = s;
   });
   const pv = p.prev || {}; p.prev = out;
