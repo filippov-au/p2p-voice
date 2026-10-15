@@ -1,7 +1,7 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=b3";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=b3";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=b3";
-const SIGNAL = "wss://p2p-voice-signal-v2.tmn-sun.workers.dev/room/";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p10";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p10";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p10";
+const SIGNAL = "wss://p2p-voice-signal.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
 let ws, localStream, nick, muted = false, statsTimer, myId = null, roomKind = "1:1", roomMax = 2, roomFull = false;

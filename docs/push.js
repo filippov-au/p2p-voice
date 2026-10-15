@@ -1,5 +1,5 @@
 // Web Push subscription: "notify me when someone joins".
-const API = "https://p2p-voice-signal-v2.tmn-sun.workers.dev/api/push/";
+const API = "https://p2p-voice-signal.tmn-sun.workers.dev/api/push/";
 export function clientId() {
   let id = localStorage.clientId;
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(id || "")) { id = Array.from(crypto.getRandomValues(new Uint8Array(16)), x => x.toString(16).padStart(2, "0")).join(""); localStorage.clientId = id; }

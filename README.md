@@ -1,7 +1,7 @@
 # p2p-voice
 P2P voice + text chat for gaming (2 peers), tuned for stability over latency: WebRTC Opus mono 48k, ~48 kbps, 20 ms ptime (maxptime 40), in-band FEC on, DTX off, ~80 ms receiver jitter buffer (`jitterBufferTarget`, fallback `playoutDelayHint`), sender priority high; chat over DataChannel; public STUN only (no TURN). Echo cancellation, noise suppression and auto gain are always on.
 - `docs/` — static frontend (GitHub Pages).
-> **Branch `v2` = BETA** (https://p2p-voice-beta.pages.dev, Worker `p2p-voice-signal-v2`): 1:1 rooms (max 2) and group rooms `#g-…` (full mesh, max 5; newcomer offers to existing peers), per-peer stats/volume and peer list on the LCD, WS keepalive (ping every 5 s, reconnect after 10 s without pong); the DO evicts sockets silent > 15 s (auto-response timestamps + alarm) and replaces the old socket on a same-clientId rejoin.
+> **Prod (`main`)** = https://filippov-au.github.io/p2p-voice/ + Worker `p2p-voice-signal`. **Branch `v2` = BETA** (https://p2p-voice-beta.pages.dev, Worker `p2p-voice-signal-v2`): 1:1 rooms (max 2) and group rooms `#g-…` (full mesh, max 5; newcomer offers to existing peers), per-peer stats/volume and peer list on the LCD, WS keepalive (ping every 5 s, reconnect after 10 s without pong); the DO evicts sockets silent > 15 s (auto-response timestamps + alarm) and replaces the old socket on a same-clientId rejoin.
 
 - Beta 1:1 rooms: game-oriented screen share («Показать экран», desktop only): getDisplayMedia 60 fps/1080p + system audio, contentHint motion, VP9>H264>VP8, maintain-framerate, 6 Mbps; game audio on its own track (not voice-munged); viewer video with fullscreen + game-audio slider; perfect-negotiation renegotiation.
 

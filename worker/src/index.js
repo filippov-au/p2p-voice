@@ -3,9 +3,9 @@ import { sendPush } from "./webpush.js";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const CID_RE = /^[A-Za-z0-9_-]{8,64}$/;
-const SITE = "https://p2p-voice-beta.pages.dev/";
-const ALLOWED_ORIGINS = ["https://p2p-voice-beta.pages.dev"];
-const isAllowed = o => ALLOWED_ORIGINS.includes(o) || /^https:\/\/[a-z0-9-]+\.p2p-voice-beta\.pages\.dev$/.test(o || "");
+const SITE = "https://filippov-au.github.io/p2p-voice/";
+const ALLOWED_ORIGINS = ["https://filippov-au.github.io"];
+const isAllowed = o => ALLOWED_ORIGINS.includes(o);
 
 function cors(req) {
   const o = req.headers.get("Origin");

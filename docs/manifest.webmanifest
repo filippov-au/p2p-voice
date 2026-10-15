@@ -1,6 +1,6 @@
 {
-  "name": "P2P Voice BETA",
-  "short_name": "P2P Beta",
+  "name": "P2P Voice",
+  "short_name": "P2P Voice",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
