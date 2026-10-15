@@ -3,6 +3,8 @@ P2P voice + text chat for gaming (2 peers), tuned for stability over latency: We
 - `docs/` — static frontend (GitHub Pages).
 > **Branch `v2` = BETA** (https://p2p-voice-beta.pages.dev, Worker `p2p-voice-signal-v2`): 1:1 rooms (max 2) and group rooms `#g-…` (full mesh, max 5; newcomer offers to existing peers), per-peer stats/volume and peer list on the LCD, WS keepalive (ping every 5 s, reconnect after 10 s without pong); the DO evicts sockets silent > 15 s (auto-response timestamps + alarm) and replaces the old socket on a same-clientId rejoin.
 
+- Beta 1:1 rooms: game-oriented screen share («Показать экран», desktop only): getDisplayMedia 60 fps/1080p + system audio, contentHint motion, VP9>H264>VP8, maintain-framerate, 6 Mbps; game audio on its own track (not voice-munged); viewer video with fullscreen + game-audio slider; perfect-negotiation renegotiation.
+
 - `worker/` — Cloudflare Worker + Durable Object signaling (`/room/<id>` WebSocket, max 2 peers).
 Open the site, click **Create room**, share the link (room secret is in the URL hash).
 

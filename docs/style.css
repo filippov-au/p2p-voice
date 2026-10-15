@@ -75,3 +75,6 @@ body.peer-on .signal{display:block}
 .room-btns{display:-webkit-box;display:flex;gap:10px}
 .room-btns .ptt{-webkit-box-flex:1;flex:1 1 0;min-width:0;width:auto;min-height:72px;padding:0 6px;font-size:20px;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .room-btns #creategroup{margin-top:4px}.room-btns{-webkit-box-align:stretch;align-items:stretch}
+.share{display:block;width:100%;margin-top:10px;min-height:44px}.share.sharing{background:linear-gradient(#ff8a6b,#e2482a);color:#fff}
+#screenvideo{width:100%;aspect-ratio:16/9;height:auto;object-fit:contain;background:#000;cursor:zoom-in}
+#gamevolrow{display:flex;align-items:center;gap:8px;color:#c9ccd1;font-size:13px}#gamevolrow[hidden]{display:none}#gamevol{flex:1}

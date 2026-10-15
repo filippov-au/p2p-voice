@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=b1";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=b1";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=b1";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=b3";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=b3";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=b3";
 const SIGNAL = "wss://p2p-voice-signal-v2.tmn-sun.workers.dev/room/";
 const ICE = [{ urls: "stun:stun.cloudflare.com:3478" }, { urls: "stun:stun.l.google.com:19302" }];
 const $ = id => document.getElementById(id);
@@ -90,7 +90,14 @@ function peerOf(id, nickName) {
   p.audio.volume = +(localStorage["vol:" + (p.nick || id)] ?? 1);
   if (localStorage.spkId && p.audio.setSinkId) p.audio.setSinkId(localStorage.spkId === "default" ? "" : localStorage.spkId).catch(() => {});
   pc.onicecandidate = e => e.candidate && send({ type: "ice", to: id, candidate: e.candidate });
-  pc.ontrack = e => { p.audio.srcObject = e.streams[0]; setBuffer(e.receiver); p.audio.play().catch(() => {}); };
+  pc.ontrack = e => {
+    const st = e.streams[0];
+    // First audio stream = voice. Any other stream (video and/or game audio) = screen share.
+    if (e.track.kind === "audio" && (!p.voiceStreamId || p.voiceStreamId === st?.id)) {
+      p.voiceStreamId = st?.id; p.audio.srcObject = st; setBuffer(e.receiver); p.audio.play().catch(() => {}); return;
+    }
+    if (st) showRemoteScreen(p, st, e.track);
+  };
   pc.ondatachannel = e => setupDC(p, e.channel);
   pc.onconnectionstatechange = () => {
     if (peers.get(id) !== p) return;
@@ -111,6 +118,7 @@ function setupDC(p, ch) {
   ch.onclose = () => refreshCall();
   ch.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.t === "nick") { const first = !p.nick; p.nick = String(m.nick).slice(0, 32); p.audio.volume = +(localStorage["vol:" + p.nick] ?? p.audio.volume); if (first || !p.announced) { p.announced = true; log(`${p.nick} joined`, "sys"); } refreshCall(); }
+    if (m.t === "screen") { if (!m.on) hideRemoteScreen(p); else log(`${p.nick || "peer"} is sharing the screen`, "sys"); }
     if (m.t === "msg") chatLine(p.nick || m.nick, m.text); };
 }
 function removePeer(id, why) {
@@ -118,15 +126,28 @@ function removePeer(id, why) {
   peers.delete(id); clearTimeout(p.restartTimer);
   if (p.up) playDisconnectSound();
   try { p.dc?.close(); p.pc.close(); } catch {}
-  p.audio.srcObject = null; p.audio.remove();
+  p.audio.srcObject = null; p.audio.remove(); hideRemoteScreen(p); if (screen.peer === p) stopShare();
   if (why) log(`${p.nick || "peer"} left`, "sys");
   refreshCall();
 }
 async function offerTo(p, restart = false) {
   p.offerer = true;
   if (!restart) setupDC(p, p.pc.createDataChannel("chat", { ordered: true }));
-  const o = await p.pc.createOffer(restart ? { iceRestart: true } : {}); o.sdp = mungeOpus(o.sdp);
-  await p.pc.setLocalDescription(o); send({ type: "offer", to: p.id, sdp: o.sdp, restart });
+  p.makingOffer = true;
+  try { const o = await p.pc.createOffer(restart ? { iceRestart: true } : {}); o.sdp = mungeOpus(o.sdp);
+    await p.pc.setLocalDescription(o); send({ type: "offer", to: p.id, sdp: o.sdp, restart }); }
+  finally { p.makingOffer = false; }
+}
+// Mid-call renegotiation (screen share add/remove). Perfect negotiation: on collision the "polite" side
+// (higher peer id) rolls back, the impolite side ignores the incoming offer. Voice roles (offerer/ICE restart) unchanged.
+async function renegotiate(p) {
+  if (!p || p.pc.signalingState === "closed") return;
+  p.makingOffer = true;
+  try { const o = await p.pc.createOffer(); o.sdp = mungeOpus(o.sdp);
+    if (p.pc.signalingState !== "stable") return;
+    await p.pc.setLocalDescription(o); send({ type: "offer", to: p.id, sdp: o.sdp, reneg: true }); }
+  catch (e) { console.warn("renegotiate:", e.message); }
+  finally { p.makingOffer = false; }
 }
 async function iceRestart(p) {
   if (peers.get(p.id) !== p || p.pc.connectionState === "connected" || ws?.readyState !== 1 || p.restarts >= 5) return;
@@ -152,14 +173,124 @@ async function onSignal(m) {
   if (!m.from || m.from === myId) return;
   if (m.type === "offer") {
     let p = peers.get(m.from);
+    if (m.reneg && p) {
+      const polite = myId > m.from, collision = p.makingOffer || p.pc.signalingState !== "stable";
+      if (collision && !polite) return; // impolite: ignore, our offer wins
+      if (collision) await p.pc.setLocalDescription({ type: "rollback" }).catch(() => {});
+      await p.pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
+      const a = await p.pc.createAnswer(); a.sdp = mungeOpus(a.sdp); await p.pc.setLocalDescription(a);
+      send({ type: "answer", to: m.from, sdp: a.sdp });
+      if (collision && screen.peer === p) renegotiate(p); // our rolled-back change goes again
+      return;
+    }
     if (p && !m.restart && (p.offerer || p.pc.remoteDescription)) { removePeer(m.from); p = null; }
     p ||= peerOf(m.from); p.offerer = false;
     await p.pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
     const a = await p.pc.createAnswer(); a.sdp = mungeOpus(a.sdp); await p.pc.setLocalDescription(a);
     send({ type: "answer", to: m.from, sdp: a.sdp });
-  } else if (m.type === "answer") { const p = peers.get(m.from); if (p) await p.pc.setRemoteDescription({ type: "answer", sdp: m.sdp }); }
+  } else if (m.type === "answer") { const p = peers.get(m.from); if (p && p.pc.signalingState === "have-local-offer") { await p.pc.setRemoteDescription({ type: "answer", sdp: m.sdp }); if (screen.senders.length) tuneScreenSenders(); } }
   else if (m.type === "ice") { const p = peers.get(m.from); if (p) try { await p.pc.addIceCandidate(m.candidate); } catch (e) { console.warn(e); } }
 }
+
+// ---------- Screen share (1:1 rooms only) ----------
+const screen = { stream: null, senders: [], prev: null, peer: null };
+const isMobile = /Mobi|Android|iP(hone|ad|od)/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+const canShare = () => !!navigator.mediaDevices?.getDisplayMedia && !isMobile && roomKind === "1:1";
+function updateShareBtn() {
+  const b = $("share"); if (!b) return;
+  b.hidden = !canShare();
+  b.disabled = !screen.stream && ![...peers.values()].some(p => p.up);
+  b.textContent = screen.stream ? "Остановить показ" : "Показать экран";
+  b.classList.toggle("sharing", !!screen.stream);
+}
+function sortCodecs(tr) {
+  try {
+    const caps = RTCRtpReceiver.getCapabilities?.("video")?.codecs; if (!caps || !tr?.setCodecPreferences) return;
+    const rank = c => { const t = c.mimeType.toLowerCase(); return t === "video/vp9" ? 0 : t === "video/h264" ? 1 : t === "video/vp8" ? 2 : 3; };
+    tr.setCodecPreferences([...caps].sort((a, b) => rank(a) - rank(b)));
+  } catch (e) { console.warn("codec prefs:", e.message); }
+}
+async function tuneScreenSenders() {
+  for (const s of screen.senders) {
+    if (s.track?.kind !== "video") continue;
+    try { const prm = s.getParameters(); prm.degradationPreference = "maintain-framerate";
+      if (!prm.encodings?.length) continue;
+      prm.encodings.forEach(e => { e.maxBitrate = 6_000_000; e.maxFramerate = 60; });
+      await s.setParameters(prm); } catch (e) { console.warn("screen params:", e.message); }
+  }
+}
+async function startShare() {
+  const p = [...peers.values()].find(x => x.up); if (!p || screen.stream || !canShare()) return;
+  let st;
+  try {
+    st = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: true },
+      suppressLocalAudioPlayback: true, systemAudio: "include", selfBrowserSurface: "exclude", surfaceSwitching: "include" });
+  } catch (e) { if (e.name !== "NotAllowedError") log("Screen share failed: " + e.message, "sys"); return; }
+  screen.stream = st; screen.prev = null; screen.peer = p;
+  const v = st.getVideoTracks()[0]; if (v) { try { v.contentHint = "motion"; } catch {} v.addEventListener("ended", stopShare, { once: true }); }
+  st.getAudioTracks().forEach(t => { try { t.contentHint = "music"; } catch {} }); // game audio: own m-line, voice Opus munging only touches the first audio section
+  screen.senders = st.getTracks().map(t => {
+    const s = p.pc.addTrack(t, st);
+    if (t.kind === "video") sortCodecs(p.pc.getTransceivers().find(x => x.sender === s));
+    return s;
+  });
+  await tuneScreenSenders();
+  try { p.dc?.readyState === "open" && p.dc.send(JSON.stringify({ t: "screen", on: true })); } catch {}
+  log(`screen share started${st.getAudioTracks().length ? " (with audio)" : ""}`, "sys");
+  updateShareBtn(); await renegotiate(p);
+}
+async function stopShare() {
+  const st = screen.stream; if (!st) return;
+  const p = screen.peer; screen.stream = null; screen.peer = null;
+  st.getTracks().forEach(t => t.stop());
+  if (p && peers.get(p.id) === p && p.pc.signalingState !== "closed") {
+    for (const s of screen.senders) try { p.pc.removeTrack(s); } catch {}
+    try { p.dc?.readyState === "open" && p.dc.send(JSON.stringify({ t: "screen", on: false })); } catch {}
+    await renegotiate(p);
+  }
+  screen.senders = []; $("screenstat").hidden = true;
+  log("screen share stopped", "sys"); updateShareBtn();
+}
+$("share").onclick = () => (screen.stream ? stopShare() : startShare());
+window.__share = { start: startShare, stop: stopShare, state: () => !!screen.stream };
+function showRemoteScreen(p, st, track) {
+  const v = $("screenvideo"); p.viewPrev = null;
+  if (v.srcObject !== st) v.srcObject = st;
+  v.volume = +(localStorage.gameVol ?? 1); $("gamevol").value = v.volume;
+  if (localStorage.spkId && v.setSinkId) v.setSinkId(localStorage.spkId === "default" ? "" : localStorage.spkId).catch(() => {});
+  $("screenview").hidden = false; $("gamevolrow").hidden = !st.getAudioTracks().length;
+  v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  track.onended = () => { if (!st.getTracks().some(t => t.readyState === "live")) hideRemoteScreen(p); };
+  st.onremovetrack = () => { if (!st.getVideoTracks().length) hideRemoteScreen(p); else $("gamevolrow").hidden = !st.getAudioTracks().length; };
+  st.onaddtrack = () => { $("gamevolrow").hidden = !st.getAudioTracks().length; };
+  p.viewing = true;
+}
+function hideRemoteScreen(p) {
+  if (!p?.viewing) return; p.viewing = false;
+  const v = $("screenvideo"); v.pause(); v.srcObject = null; $("screenview").hidden = true; $("screenstat").hidden = true;
+}
+$("screenvideo").onclick = () => { const v = $("screenvideo"); if (v.muted) { v.muted = false; }
+  if (document.fullscreenElement) document.exitFullscreen?.(); else if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); else v.webkitEnterFullscreen?.(); };
+$("gamevol").oninput = e => { const v = $("screenvideo"); v.muted = false; v.volume = +e.target.value; localStorage.gameVol = e.target.value; };
+async function screenStats() {
+  const p = screen.stream ? screen.peer : [...peers.values()].find(x => x.viewing);
+  if (!p) { $("screenstat").hidden = true; return; }
+  const sending = !!screen.stream, r = await p.pc.getStats(); let cur = null;
+  r.forEach(s => {
+    if (s.kind !== "video") return;
+    if (sending && s.type === "outbound-rtp" && s.bytesSent) cur = { w: s.frameWidth, h: s.frameHeight, fps: s.framesPerSecond, bytes: s.bytesSent, ts: s.timestamp, lim: s.qualityLimitationReason };
+    if (!sending && s.type === "inbound-rtp" && s.bytesReceived) cur = { w: s.frameWidth, h: s.frameHeight, fps: s.framesPerSecond, bytes: s.bytesReceived, ts: s.timestamp, dec: s.framesDecoded };
+  });
+  if (!cur) return;
+  const holder = sending ? screen : p, key = sending ? "prev" : "viewPrev", pv = holder[key]; holder[key] = cur;
+  const kbps = pv && cur.ts > pv.ts && cur.bytes >= pv.bytes ? 8 * (cur.bytes - pv.bytes) / (cur.ts - pv.ts) : null;
+  $("screenstat").hidden = false;
+  $("screeninfo").textContent = `${sending ? "TX" : "RX"} ${cur.w || "—"}×${cur.h || "—"} · ${cur.fps ?? "—"}fps · ${kbps != null ? (kbps / 1000).toFixed(2) + "Mbps" : "—"}${cur.lim && cur.lim !== "none" ? " · lim " + cur.lim : ""}`;
+  window.__screenStats = { ...cur, kbps, sending };
+}
+setInterval(() => { screenStats().catch(() => {}); updateShareBtn(); }, 1000);
 
 // ---------- Signaling WebSocket with keepalive + auto-reconnect ----------
 let lastPong = 0, pingTimer = null, reconnectTimer = null, roomId = null;
@@ -313,7 +444,7 @@ async function fillOutputs() {
 }
 async function setOutput(id, remember = true) {
   try { const sid = id === "default" ? "" : id; await $("remote").setSinkId(sid);
-    await Promise.all([...peers.values()].map(p => p.audio.setSinkId?.(sid))); }
+    await Promise.all([...peers.values()].map(p => p.audio.setSinkId?.(sid))); await $("screenvideo").setSinkId?.(sid)?.catch(() => {}); }
   catch (e) { log("Output switch failed: " + e.message, "sys"); return; }
   try { setTonesSink(id); } catch {}
   if (remember) { localStorage.spkId = id; log("output: " + ($("spk").selectedOptions[0]?.textContent || id), "sys"); }
