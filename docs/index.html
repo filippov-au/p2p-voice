@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>P2P Voice</title><link rel="stylesheet" href="style.css?v=9">
+<title>P2P Voice BETA</title><link rel="stylesheet" href="style.css?v=b3">
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2b2e33">
 <link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0"/></filter></svg>
@@ -8,19 +8,23 @@
  <div class="antenna" aria-hidden="true"></div>
  <header class="top">
   <span class="knob" aria-hidden="true"></span>
-  <h1>P2P&nbsp;Voice <small>CH-1 · walkie</small></h1>
+  <h1>P2P&nbsp;Voice <span class="beta">BETA</span> <small>CH-1 · walkie</small></h1>
   <span class="led" aria-hidden="true"></span>
  </header>
  <div class="grille" aria-hidden="true"></div>
 
  <div id="lobby"><div class="lcd lcd-lobby"><span>NO CHANNEL</span><span class="blink">READY_</span></div>
-  <button id="create" class="ptt">Create room</button></div>
+  <div class="room-btns"><button id="create" class="ptt" aria-label="Create room (1:1)">1:1</button>
+  <button id="creategroup" class="ptt" aria-label="Create group (up to 5)">Group · 5</button></div></div>
 
  <div id="room" hidden>
   <div class="lcd">
+   <div class="lcd-row"><span class="lbl">ROOM</span><b id="roomkind">—</b></div>
    <div class="lcd-row"><span class="lbl">STATUS</span><b id="status">idle</b></div>
    <div class="lcd-row"><span class="lbl">PEER</span><b id="peer">—</b></div>
    <div id="stats">RTT <b id="rtt">—</b>ms · LOSS <b id="loss">—</b> · JIT <b id="jitter">—</b>ms<br>CODEC <b id="codec">—</b><br>CONCEALED <b id="conc">—</b></div>
+   <div id="screenstat" class="lcd-row" hidden><span class="lbl">SCREEN</span><b id="screeninfo">—</b></div>
+   <div id="peerlist" hidden><span class="lbl">PEERS</span><ul id="peers"></ul></div>
   </div>
 
   <div class="invite">
@@ -30,15 +34,19 @@
 
   <div class="controls">
    <button id="mute" class="ptt" type="button">Mute</button>
+   <button id="share" class="btn share" type="button" hidden disabled>Показать экран</button>
    <div class="selects"><select id="mic" hidden title="Microphone"></select><select id="spk" hidden title="Output"></select></div>
   </div>
   <p class="note"><small id="notifyinfo" hidden>Чтобы получать уведомления на iPhone, добавьте сайт на экран «Домой» и откройте его с иконки.</small></p>
 
+  <div id="screenview" hidden><span class="plate">Screen</span>
+   <video id="screenvideo" class="screen" autoplay playsinline title="Click for fullscreen"></video>
+   <label id="gamevolrow" hidden>Game audio <input id="gamevol" type="range" min="0" max="1" step="0.05" value="1"></label></div>
   <div class="signal"><span class="plate">Signal</span><canvas id="chart" class="screen"></canvas></div>
   <span class="plate">Chat</span><div id="log" class="screen"></div>
   <form id="chat"><input id="msg" autocomplete="off" placeholder="Message…" disabled><button disabled id="send" class="btn">Send</button></form>
-  <audio id="remote" autoplay></audio>
+  <audio id="remote" autoplay></audio><div id="audios" hidden></div>
  </div>
 </main>
-<script src="app.js?v=7" type="module"></script>
-<script src="ui.js?v=9" type="module"></script></body></html>
+<script src="app.js?v=b3" type="module"></script>
+<script src="ui.js?v=b3" type="module"></script></body></html>

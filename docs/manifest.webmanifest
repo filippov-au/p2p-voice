@@ -1,8 +1,8 @@
 {
-  "name": "P2P Voice",
-  "short_name": "P2P Voice",
-  "start_url": "/p2p-voice/",
-  "scope": "/p2p-voice/",
+  "name": "P2P Voice BETA",
+  "short_name": "P2P Beta",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#16181d",
   "theme_color": "#16181d",

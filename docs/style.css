@@ -67,3 +67,14 @@ body.peer-on .signal{display:block}
 #log:empty::before{content:"No messages yet";color:#4f6a45;font-style:italic}
 .screen+.plate,.note+.plate{margin-top:12px}
 .signal+.plate{margin-top:14px}
+.beta{display:inline-block;background:#ff5a36;color:#fff;font-size:.55em;font-weight:800;letter-spacing:.08em;padding:2px 6px;border-radius:4px;vertical-align:middle;box-shadow:0 1px 0 rgba(0,0,0,.4)}
+#creategroup{margin-top:10px}
+#peerlist{margin-top:6px}#peers{list-style:none;margin:4px 0 0;padding:0}
+#peers li{display:grid;grid-template-columns:1fr 90px;gap:2px 8px;align-items:center;padding:4px 0;border-top:1px dashed rgba(0,0,0,.25);font-size:13px}
+#peers .pn{font-weight:700}#peers .ps{grid-column:1;font-size:11px;opacity:.8}#peers .pv{grid-column:2;grid-row:1/3;width:90px}
+.room-btns{display:-webkit-box;display:flex;gap:10px}
+.room-btns .ptt{-webkit-box-flex:1;flex:1 1 0;min-width:0;width:auto;min-height:72px;padding:0 6px;font-size:20px;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room-btns #creategroup{margin-top:4px}.room-btns{-webkit-box-align:stretch;align-items:stretch}
+.share{display:block;width:100%;margin-top:10px;min-height:44px}.share.sharing{background:linear-gradient(#ff8a6b,#e2482a);color:#fff}
+#screenvideo{width:100%;aspect-ratio:16/9;height:auto;object-fit:contain;background:#000;cursor:zoom-in}
+#gamevolrow{display:flex;align-items:center;gap:8px;color:#c9ccd1;font-size:13px}#gamevolrow[hidden]{display:none}#gamevol{flex:1}
