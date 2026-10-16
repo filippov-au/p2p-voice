@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p15";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p15";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p15";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p16";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p16";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p16";
 // Signaling servers in priority order (self-hosted server/ first, then the Cloudflare Worker). Everyone uses the
 // same order, so peers meet on the first reachable one; after 2 failures in a row the client moves to the next.
 const SIGNALS = ["wss://138-201-154-35.sslip.io/room/", "wss://p2p-voice-signal.tmn-sun.workers.dev/room/"];
@@ -386,9 +386,18 @@ async function peerStats(p) {
   if (lc) p.route = lc.candidateType === "relay" || rc?.candidateType === "relay" ? "TURN" : "P2P";
   return out;
 }
+// What ICE found: local/remote candidate types and pair states, to tell "nothing arrived" from "all checks failed".
+async function iceReport(p) {
+  const r = await p.pc.getStats(), cnt = (o, k) => (o[k] = (o[k] || 0) + 1, o), loc = {}, rem = {}, pairs = {};
+  r.forEach(s => { if (s.type === "local-candidate") cnt(loc, s.candidateType + "/" + (s.relayProtocol || s.protocol));
+    if (s.type === "remote-candidate") cnt(rem, s.candidateType); if (s.type === "candidate-pair") cnt(pairs, s.state); });
+  const f = o => Object.entries(o).map(([k, v]) => k + "×" + v).join(" ") || "нет";
+  return `ICE: свои ${f(loc)}; от собеседника ${f(rem)}; проверки ${f(pairs)}; ice=${p.pc.iceConnectionState}, dtls=${p.pc.connectionState}`;
+}
 async function stats() {
-  for (const p of peers.values()) if (!p.up && Date.now() - p.born > 25000)
-    hint(`Не получается соединиться с ${p.nick || "собеседником"} ${iceExtra.length ? "ни напрямую, ни через TURN" : "напрямую, а TURN на этом сервере нет"}.`);
+  for (const p of peers.values()) if (!p.up && Date.now() - p.born > 25000 && !p.iceDiag) {
+    p.iceDiag = true; iceReport(p).then(t => log(t, "sys")).catch(() => {});
+    hint(`Не получается соединиться с ${p.nick || "собеседником"} ${iceExtra.length ? "ни напрямую, ни через TURN" : "напрямую, а TURN на этом сервере нет"}.`); }
   setNet();
   const up = [...peers.values()].filter(p => p.up); if (!up.length) { renderPeerList(); return; }
   const all = await Promise.all(up.map(p => peerStats(p).catch(() => ({}))));
