@@ -160,3 +160,4 @@ body.peer-on .signal{display:block}
 @media (min-width:700px){.radio{padding:24px 28px 30px}h1{font-size:30px}.lcd-row{font-size:26px}}
 @media (max-width:380px){.room-btns .ptt{font-size:22px}.lcd-row{font-size:21px}.lbl{width:58px;font-size:16px}#mute::after{display:none}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+#log .warn{color:#ffd28a}

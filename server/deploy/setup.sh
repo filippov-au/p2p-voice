@@ -36,6 +36,7 @@ fi
 
 # --- signaling server ---
 id -u p2pvoice >/dev/null 2>&1 || useradd --system --home /opt/p2p-voice --shell /usr/sbin/nologin p2pvoice
+mkdir -p /var/log/caddy && chown caddy:caddy /var/log/caddy 2>/dev/null || true
 mkdir -p /opt/p2p-voice && cp "$REPO/server/index.mjs" "$REPO/server/package.json" "$REPO/server/package-lock.json" /opt/p2p-voice/
 (cd /opt/p2p-voice && npm ci --omit=dev --no-audit --no-fund)
 chown -R root:root /opt/p2p-voice && chmod -R u=rwX,go=rX /opt/p2p-voice
@@ -87,6 +88,11 @@ sed -i 's/^#\?TURNSERVER_ENABLED=.*/TURNSERVER_ENABLED=1/' /etc/default/coturn 2
 # --- Caddy: HTTPS + WebSocket proxy ---
 cat > /etc/caddy/Caddyfile <<EOF
 $DOMAIN {
+	log {
+		output file /var/log/caddy/access.log {
+			roll_keep 5
+		}
+	}
 	reverse_proxy 127.0.0.1:8787
 }
 EOF

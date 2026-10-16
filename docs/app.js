@@ -1,6 +1,6 @@
-import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p14";
-import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p14";
-import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p14";
+import { enableWakeLock, disableWakeLock } from "./wakelock.js?v=p15";
+import { unlockAudio, playConnectSound, playDisconnectSound, setTonesSink } from "./tones.js?v=p15";
+import { clientId, registerSW, subscribePush, pushSupported } from "./push.js?v=p15";
 // Signaling servers in priority order (self-hosted server/ first, then the Cloudflare Worker). Everyone uses the
 // same order, so peers meet on the first reachable one; after 2 failures in a row the client moves to the next.
 const SIGNALS = ["wss://138-201-154-35.sslip.io/room/", "wss://p2p-voice-signal.tmn-sun.workers.dev/room/"];
@@ -10,6 +10,22 @@ const $ = id => document.getElementById(id);
 let ws, localStream, nick, muted = false, statsTimer, myId = null, roomKind = "1:1", roomMax = 2, roomFull = false;
 
 function log(text, cls = "") { const d = document.createElement("div"); d.className = cls; d.textContent = text; $("log").append(d); $("log").scrollTop = 1e9; }
+// System line with a link to the connectivity check page (shown once per reason).
+const hinted = new Set();
+function hint(text) {
+  if (hinted.has(text)) return; hinted.add(text);
+  const d = document.createElement("div"); d.className = "sys warn"; d.append("⚠ " + text + " ");
+  const a = document.createElement("a"); a.href = "check.html"; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Проверить связь";
+  d.append(a); $("log").append(d); $("log").scrollTop = 1e9;
+}
+// LCD "NET" row: signaling server + how audio flows (P2P direct or via TURN relay).
+const sigLabel = u => u.includes("workers.dev") ? "CLOUDFLARE" : "VPS";
+let netState = "—";
+function setNet(state) {
+  if (state != null) netState = state;
+  const routes = [...new Set([...peers.values()].filter(p => p.up && p.route).map(p => p.route))];
+  $("net").textContent = sigLabel(SIGNALS[sigIdx]) + " " + netState + (routes.length ? " · " + routes.join("/") : "");
+}
 // Chat line with safe auto-linking: text nodes + <a>, never innerHTML.
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 function linkify(text) {
@@ -86,7 +102,7 @@ function refreshCall() {
 function peerOf(id, nickName) {
   let p = peers.get(id);
   if (p) { if (nickName) p.nick = nickName; return p; }
-  p = { id, nick: nickName || "", up: false, restarts: 0, offerer: false, prev: null, st: {} };
+  p = { id, nick: nickName || "", up: false, restarts: 0, offerer: false, prev: null, st: {}, born: Date.now() };
   const pc = p.pc = new RTCPeerConnection({ iceServers: [...iceExtra, ...ICE], bundlePolicy: "max-bundle", rtcpMuxPolicy: "require" });
   localStream.getAudioTracks().forEach(t => pc.addTrack(t, localStream));
   p.audio = document.createElement("audio"); p.audio.autoplay = true; p.audio.dataset.peer = id; $("audios").append(p.audio);
@@ -166,7 +182,7 @@ async function onSignal(m) {
   if (m.type === "pong") { lastPong = Date.now(); return; }
   if (m.type === "full") { roomFull = true; roomMax = m.max; for (const id of [...peers.keys()]) removePeer(id); status(`room full (max ${m.max})`); window.__state = "full"; return; }
   if (m.type === "welcome") {
-    myId = m.id; iceExtra = Array.isArray(m.ice) ? m.ice : []; roomKind = m.kind; roomMax = m.max; document.body.classList.toggle("group", roomKind === "group");
+    myId = m.id; iceExtra = Array.isArray(m.ice) ? m.ice : []; sigCycle = 0; setNet("OK"); roomKind = m.kind; roomMax = m.max; document.body.classList.toggle("group", roomKind === "group");
     $("roomkind").textContent = roomKind === "group" ? `GROUP · up to ${roomMax}` : "1:1";
     for (const id of [...peers.keys()]) removePeer(id); // fresh session after reconnect
     refreshCall();
@@ -305,24 +321,30 @@ setInterval(() => { screenStats().catch(() => {}); updateShareBtn(); }, 1000);
 
 // ---------- Signaling WebSocket with keepalive + auto-reconnect ----------
 let lastPong = 0, pingTimer = null, reconnectTimer = null, roomId = null;
-let sigIdx = 0, sigFails = 0, sockOpenedAt = 0;
-function sigFailed() { // a socket died: count it unless it had been healthy for a minute
+let sigIdx = 0, sigFails = 0, sockOpenedAt = 0, sigCycle = 0;
+function sigFailed(why) { // a socket died: count it unless it had been healthy for a minute
+  const name = sigLabel(SIGNALS[sigIdx]);
   if (sockOpenedAt && Date.now() - sockOpenedAt > 60000) sigFails = 0;
-  if (++sigFails >= 2 && SIGNALS.length > 1) { sigIdx = (sigIdx + 1) % SIGNALS.length; sigFails = 0; log("signaling: trying " + new URL(SIGNALS[sigIdx]).host, "sys"); }
+  const loud = sigCycle < SIGNALS.length; // details only for the first round of tries
+  setNet("✕"); if (loud) log(`сервер ${name}: ${why}`, "sys");
+  if (++sigFails >= 2) {
+    if (++sigCycle >= SIGNALS.length) hint(`Нет связи ни с одним сервером (${SIGNALS.map(sigLabel).join(", ")}). Похоже, их блокирует сеть.`);
+    if (SIGNALS.length > 1) { sigIdx = (sigIdx + 1) % SIGNALS.length; sigFails = 0; if (sigCycle < SIGNALS.length) log("переключаюсь на сервер " + sigLabel(SIGNALS[sigIdx]), "sys"); }
+  }
 }
 function connectWS() {
-  clearTimeout(reconnectTimer); sockOpenedAt = 0;
+  clearTimeout(reconnectTimer); sockOpenedAt = 0; setNet("…");
   const sock = ws = new WebSocket(SIGNALS[sigIdx] + roomId + "?cid=" + clientId() + "&nick=" + encodeURIComponent(nick));
   setTimeout(() => { if (sock === ws && sock.readyState === 0) sock.close(); }, 8000); // blocked handshakes can hang
   sock.onmessage = e => { if (sock === ws) { let m; try { m = JSON.parse(e.data); } catch { return; } onSignal(m).catch(err => console.warn(err)); } };
   sock.onopen = () => { lastPong = sockOpenedAt = Date.now(); status("signaling connected"); };
-  sock.onclose = () => { if (sock !== ws) return; if (roomFull) return;
-    status("signaling lost, reconnecting…"); sigFailed(); reconnectTimer = setTimeout(connectWS, 1500); };
+  sock.onclose = e => { if (sock !== ws) return; if (roomFull) return;
+    status("signaling lost, reconnecting…"); sigFailed(sockOpenedAt ? `соединение оборвалось (код ${e.code})` : "не отвечает"); reconnectTimer = setTimeout(connectWS, sigCycle >= SIGNALS.length ? 5000 : 1500); };
 }
 function keepalive() {
   if (!ws || roomFull) return;
   if (ws.readyState === 1) {
-    if (Date.now() - lastPong > 10000) { const old = ws; ws = null; try { old.close(); } catch {} status("signaling lost, reconnecting…"); sigFailed(); connectWS(); return; }
+    if (Date.now() - lastPong > 10000) { const old = ws; ws = null; try { old.close(); } catch {} status("signaling lost, reconnecting…"); sigFailed("нет ответа 10 с"); connectWS(); return; }
     ws.send('{"type":"ping"}');
   }
 }
@@ -350,18 +372,24 @@ function renderPeerList() {
   $("peerlist").hidden = roomKind !== "group";
 }
 async function peerStats(p) {
-  const r = await p.pc.getStats(); const out = {}; const codecs = {};
+  const r = await p.pc.getStats(); const out = {}; const codecs = {}; let localId, remoteId;
   r.forEach(s => {
-    if (s.type === "candidate-pair" && s.nominated && s.state === "succeeded" && s.currentRoundTripTime != null) out.rtt = s.currentRoundTripTime * 1000;
+    if (s.type === "candidate-pair" && s.nominated && s.state === "succeeded" && s.currentRoundTripTime != null) { out.rtt = s.currentRoundTripTime * 1000; localId = s.localCandidateId; remoteId = s.remoteCandidateId; }
     if (s.type === "inbound-rtp" && s.kind === "audio" && (!p.voiceTrackId || !s.trackIdentifier || s.trackIdentifier === p.voiceTrackId)) { out.lost = s.packetsLost; out.recv = s.packetsReceived; out.jitter = s.jitter * 1000; out.codecId = s.codecId; out.conc = s.concealedSamples; out.tot = s.totalSamplesReceived; }
     if (s.type === "codec") codecs[s.id] = s;
   });
   const pv = p.prev || {}; p.prev = out;
   const dl = out.lost - (pv.lost ?? out.lost), dr = out.recv - (pv.recv ?? out.recv), dc = out.conc - (pv.conc ?? out.conc), dt = out.tot - (pv.tot ?? out.tot);
   out.lossPct = dl + dr > 0 ? Math.max(0, 100 * dl / (dl + dr)) : 0; out.concPct = dt > 0 ? Math.max(0, 100 * dc / dt) : 0;
-  out.codec = codecs[out.codecId]; p.st = out; return out;
+  out.codec = codecs[out.codecId]; p.st = out;
+  const lc = localId && r.get(localId), rc = remoteId && r.get(remoteId);
+  if (lc) p.route = lc.candidateType === "relay" || rc?.candidateType === "relay" ? "TURN" : "P2P";
+  return out;
 }
 async function stats() {
+  for (const p of peers.values()) if (!p.up && Date.now() - p.born > 25000)
+    hint(`Не получается соединиться с ${p.nick || "собеседником"} ${iceExtra.length ? "ни напрямую, ни через TURN" : "напрямую, а TURN на этом сервере нет"}.`);
+  setNet();
   const up = [...peers.values()].filter(p => p.up); if (!up.length) { renderPeerList(); return; }
   const all = await Promise.all(up.map(p => peerStats(p).catch(() => ({}))));
   const worst = k => { const v = all.map(x => x[k]).filter(x => x != null); return v.length ? Math.max(...v) : null; };

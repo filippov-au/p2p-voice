@@ -1,0 +1,102 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>P2P Voice — проверка связи</title>
+<meta name="theme-color" content="#1f201e">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#1f201e;--face:#2a2c29;--ink:#e9e6da;--dim:#8f9086;--ok:#4dff6a;--bad:#ff6a52;--wait:#ffb627;--amber:#f2a93b}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:24px 16px 40px}
+main{max-width:620px;margin:0 auto}
+h1{font-size:24px;margin:0 0 8px}
+p{color:var(--dim);margin:0 0 18px}
+ol{list-style:none;margin:0 0 20px;padding:0;border-radius:12px;background:var(--face);box-shadow:inset 0 0 0 1px #111}
+li{display:grid;grid-template-columns:14px 1fr auto;gap:4px 12px;align-items:baseline;padding:12px 14px;border-top:1px solid #1a1b19}
+li:first-child{border-top:0}
+li::before{content:"";width:12px;height:12px;border-radius:50%;background:#444;align-self:center}
+li.run::before{background:var(--wait)}li.ok::before{background:var(--ok)}li.fail::before{background:var(--bad)}
+.name{font-weight:600}.res{font-variant-numeric:tabular-nums;color:var(--dim);font-size:14px;text-align:right}
+li.ok .res{color:var(--ok)}li.fail .res{color:var(--bad)}
+.det{grid-column:2/4;color:var(--dim);font-size:13px;word-break:break-word}
+.det:empty{display:none}
+button{font:inherit;font-weight:600;min-height:46px;padding:0 20px;border-radius:10px;border:1px solid #070807;cursor:pointer;color:#2b1700;background:var(--amber)}
+button:disabled{opacity:.5;cursor:default}
+textarea{width:100%;height:180px;margin-top:14px;padding:10px;border-radius:8px;border:1px solid #070807;background:#0c0d0b;color:#ffc069;font:13px/1.4 Consolas,Menlo,monospace}
+:focus-visible{outline:3px solid #ffd659;outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+</style></head><body><main>
+<h1>Проверка связи</h1>
+<p>Открой эту страницу <b>без VPN</b>, дождись конца проверки и отправь отчёт тому, кто дал ссылку. Отчёт включает твой внешний IP-адрес, по нему видно провайдера.</p>
+<ol id="list"></ol>
+<div class="row"><button id="again" type="button" disabled>Проверить ещё раз</button><button id="copy" type="button" disabled>Скопировать отчёт</button></div>
+<textarea id="report" readonly aria-label="Отчёт"></textarea>
+</main>
+<script type="module">
+const VPS = "138-201-154-35.sslip.io", VPS_IP = "138.201.154.35", WORKER = "p2p-voice-signal.tmn-sun.workers.dev";
+const $ = id => document.getElementById(id), T = 10000;
+const withTimeout = (p, ms = T) => Promise.race([p, new Promise((_, j) => setTimeout(() => j(new Error("таймаут " + ms / 1000 + " с")), ms))]);
+let ice = null;
+
+function wsCheck(url) {
+  return new Promise((res, rej) => {
+    const ws = new WebSocket(url); let done = false;
+    const fin = (f, v) => { if (done) return; done = true; try { ws.close(); } catch {} f(v); };
+    ws.onmessage = e => { try { const m = JSON.parse(e.data); if (m.type === "welcome") { if (m.ice) ice = m.ice; fin(res, "welcome"); } } catch {} };
+    ws.onclose = e => fin(rej, new Error("закрыто, код " + e.code));
+    setTimeout(() => fin(rej, new Error("таймаут")), T);
+  });
+}
+async function gather(servers, policy, want) {
+  const pc = new RTCPeerConnection({ iceServers: servers, iceTransportPolicy: policy }); pc.createDataChannel("x");
+  const got = [];
+  pc.onicecandidate = e => { const c = e.candidate?.candidate; if (c && c.includes("typ " + want)) got.push(c.split(" ").slice(2, 8).join(" ")); };
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise(r => { pc.onicegatheringstatechange = () => pc.iceGatheringState === "complete" && r(); setTimeout(r, T); });
+  pc.close();
+  if (!got.length) throw new Error("нет " + want + "-кандидатов");
+  return got[0];
+}
+const turn = (host, transport) => { const t = ice?.find(x => x.username); if (!t) throw new Error("нет TURN-доступа (сигналинг VPS не ответил)");
+  return [{ urls: [`turn:${host}:3478?transport=${transport}`], username: t.username, credential: t.credential }]; };
+const room = () => "diag" + Math.random().toString(36).slice(2, 14);
+
+const CHECKS = [
+  ["VPS: HTTPS", "сервер в Германии по имени " + VPS, () => withTimeout(fetch(`https://${VPS}/`, { mode: "no-cors", cache: "no-store" })).then(() => "ответил")],
+  ["VPS: сигналинг (WebSocket)", "то, через что находят друг друга", () => wsCheck(`wss://${VPS}/room/${room()}?cid=${room()}&nick=diag`)],
+  ["VPS: TURN по UDP", "пересылка звука через сервер", () => gather(turn(VPS, "udp"), "relay", "relay")],
+  ["VPS: TURN по TCP", "то же, но по TCP", () => gather(turn(VPS, "tcp"), "relay", "relay")],
+  ["VPS: TURN по IP, без DNS", VPS_IP + ": отличает блок домена от блока адреса", () => gather(turn(VPS_IP, "udp"), "relay", "relay")],
+  ["Cloudflare: HTTPS", WORKER, () => withTimeout(fetch(`https://${WORKER}/`, { mode: "no-cors", cache: "no-store" })).then(() => "ответил")],
+  ["Cloudflare: сигналинг", "старый сервер", () => wsCheck(`wss://${WORKER}/room/${room()}?cid=${room()}&nick=diag`)],
+  ["STUN Google", "stun.l.google.com", () => gather([{ urls: "stun:stun.l.google.com:19302" }], "all", "srflx")],
+  ["STUN Cloudflare", "stun.cloudflare.com", () => gather([{ urls: "stun:stun.cloudflare.com:3478" }], "all", "srflx")],
+];
+
+async function run() {
+  $("again").disabled = $("copy").disabled = true; ice = null;
+  const list = $("list"); list.replaceChildren();
+  const lines = [`P2P Voice check ${new Date().toISOString()}`, navigator.userAgent];
+  for (const [name, hint, fn] of CHECKS) {
+    const li = document.createElement("li"); li.className = "run";
+    li.innerHTML = `<span class="name"></span><span class="res">…</span><span class="det"></span>`;
+    li.querySelector(".name").textContent = name; li.querySelector(".det").textContent = hint; list.append(li);
+    const t0 = performance.now();
+    try {
+      const r = await fn(), ms = Math.round(performance.now() - t0);
+      li.className = "ok"; li.querySelector(".res").textContent = `OK · ${ms} мс`; li.querySelector(".det").textContent = String(r);
+      lines.push(`OK   ${name} ${ms}ms ${r}`);
+    } catch (e) {
+      li.className = "fail"; li.querySelector(".res").textContent = "нет"; li.querySelector(".det").textContent = e.message;
+      lines.push(`FAIL ${name} ${e.message}`);
+    }
+  }
+  $("report").value = lines.join("\n");
+  $("again").disabled = $("copy").disabled = false;
+}
+$("again").onclick = run;
+$("copy").onclick = async () => {
+  const b = $("copy"); let ok = false;
+  try { await navigator.clipboard.writeText($("report").value); ok = true; } catch { $("report").select(); ok = document.execCommand("copy"); }
+  b.textContent = ok ? "Скопировано" : "Выдели текст и скопируй"; setTimeout(() => b.textContent = "Скопировать отчёт", 1500);
+};
+run();
+</script></body></html>
